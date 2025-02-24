@@ -1,7 +1,12 @@
 from ctypes import CDLL
 import gi
 
-CDLL('libgtk4-layer-shell.so')
+# Load GTK4 Layer Shell
+try:
+    CDLL('libgtk4-layer-shell.so')
+except OSError:
+    print("Error: Could not load libgtk4-layer-shell.so. Please ensure gtk4-layer-shell is installed.")
+    exit(1)
 
 gi.require_version('Gtk', '4.0')
 gi.require_version('Gtk4LayerShell', '1.0')
@@ -114,13 +119,14 @@ def reload_css(css_provider, window, css_path):
 def on_activate(app):
     window = Gtk.Window(application=app)
     window.set_resizable(False)
+    window.set_decorated(False)  # Remove window decorations
 
+    # Initialize LayerShell for Wayland compositor compatibility
     LayerShell.init_for_window(window)
-    LayerShell.set_layer(window, LayerShell.Layer.TOP)
-    LayerShell.set_anchor(window, LayerShell.Edge.TOP, True)
-    LayerShell.set_margin(window, LayerShell.Edge.TOP, 0)
-    LayerShell.set_margin(window, LayerShell.Edge.LEFT, 0)
-    LayerShell.set_margin(window, LayerShell.Edge.RIGHT, 0)
+    LayerShell.set_layer(window, LayerShell.Layer.TOP)  # Place it at the top layer
+    LayerShell.set_anchor(window, LayerShell.Edge.TOP, True)  # Anchor to top edge
+    LayerShell.set_anchor(window, LayerShell.Edge.LEFT, True)  # Span full width
+    LayerShell.set_anchor(window, LayerShell.Edge.RIGHT, True)
 
     bar_content, time_button, expanded_content, notch_box = create_bar_content()
     window.set_child(bar_content)
@@ -131,6 +137,21 @@ def on_activate(app):
     
     notch_box.set_size_request(notch_width, bar_height)
 
+    # Set fixed exclusive zone for the bar only
+    LayerShell.set_exclusive_zone(window, bar_height)
+
+    # Get screen width from the first monitor
+    display = Gdk.Display.get_default()
+    monitors = display.get_monitors()  # Returns a GList of monitors
+    if monitors:
+        monitor = monitors[0]  # Use the first monitor
+        screen_width = monitor.get_geometry().width
+    else:
+        screen_width = 1920  # Fallback width
+        print("Warning: No monitors detected, using fallback width of 1920")
+
+    window.set_size_request(screen_width, bar_height)
+
     is_expanded = False
 
     def toggle_expansion(button):
@@ -139,12 +160,14 @@ def on_activate(app):
             # Collapse
             expanded_content.set_visible(False)
             notch_box.set_size_request(notch_width, bar_height)
-            GLib.timeout_add(50, lambda: notch_box.queue_resize())
+            window.set_size_request(screen_width, bar_height)
+            GLib.timeout_add(50, lambda: window.queue_resize())
         else:
-            # Expand
+            # Expand as overlay
             notch_box.set_size_request(notch_width, expanded_height)
+            window.set_size_request(screen_width, expanded_height)
             expanded_content.set_visible(True)
-            GLib.timeout_add(50, lambda: notch_box.queue_resize())
+            GLib.timeout_add(50, lambda: window.queue_resize())
         
         is_expanded = not is_expanded
 
