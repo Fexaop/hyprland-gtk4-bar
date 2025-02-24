@@ -12,6 +12,7 @@ from gi.repository import Gtk, GLib, Gdk, Gio
 from gi.repository import Gtk4LayerShell as LayerShell
 import datetime
 from widgets.corner import Corner
+from music import MusicPlayer
 
 def load_css():
     css_provider = Gtk.CssProvider()
@@ -68,8 +69,15 @@ def create_bar_content():
     notification_center = create_notification_center()
     expanded_content.append(notification_center)
     
+    right_side = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+    
     calendar = Gtk.Calendar(name="calendar")
-    expanded_content.append(calendar)
+    right_side.append(calendar)
+    
+    music_player = MusicPlayer()
+    right_side.append(music_player)
+    
+    expanded_content.append(right_side)
     
     notch_box.append(expanded_content)
     box.append(notch_box)
