@@ -3,10 +3,21 @@
   color: #fff;
   border-radius: 8px;
   font-size: 14px;
-  background-color: black;
+  background-color: transparent;
   margin: 0;
   padding: 0;
   border: none;
+  box-shadow: none;
+}
+#notch-box {
+  background-color: #000;
+  border-radius: 0 0 16px 16px; /* Top has no rounded border */
+  margin: 0;
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  min-width: 200px;
+  min-height: 30px;  /* Only set minimum height */
 }
 
 #bar-window button {
@@ -23,6 +34,7 @@ window {
   margin: 0;
   padding: 0;
   border: none;
+  box-shadow: none;
 }
 
 #corner-container {
@@ -39,4 +51,13 @@ window {
 #notch-box {
   margin: 0;
   padding: 0;
+}
+
+/* Add specific styling for corner widgets */
+.corner {
+  margin: 0;
+  padding: 0;
+  height: 30px;
+  min-height: 30px;
+  max-height: 30px;
 }
