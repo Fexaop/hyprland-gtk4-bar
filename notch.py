@@ -46,7 +46,6 @@ def create_notification_center():
     notif_box.append(clear_button)
     
     return notif_box
-
 def create_bar_content():
     box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0, name="bar-window")
     box.set_halign(Gtk.Align.CENTER)
@@ -56,52 +55,74 @@ def create_bar_content():
     left_corner.set_size_request(20, 30)
     left_corner.set_valign(Gtk.Align.START)
     left_corner.set_vexpand(False)
-    left_corner.add_css_class("corner")
+    left_corner.get_style_context().add_class("corner")
     box.append(left_corner)
 
     notch_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0, name="notch-box")
     notch_box.add_css_class("transparent-background")
 
+    # Create time button
     time_button = Gtk.Button()
     time_label = Gtk.Label(label="")
     time_button.set_child(time_label)
     time_button.set_hexpand(True)
-    notch_box.append(time_button)
     
-    expanded_content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10, name="expanded-content")
-    expanded_content.set_visible(False)  # Initially hidden
+    # Create a Gtk.Stack and add time_button as the first page
+    stack = Gtk.Stack()
+    stack.add_named(time_button, "time")
     
+    # Create a container for expanded content with overflow hidden
+    expanded_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+    expanded_container.set_overflow(Gtk.Overflow.HIDDEN)
+    
+    expanded_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10, name="expanded-content")
     notification_center = create_notification_center()
-    expanded_content.append(notification_center)
-    
+    expanded_box.append(notification_center)
     right_side = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-    
     calendar = Gtk.Calendar(name="calendar")
     right_side.append(calendar)
-    
     music_player = MusicPlayer()
     right_side.append(music_player)
+    expanded_box.append(right_side)
     
-    expanded_content.append(right_side)
+    # Add expanded_box to the container
+    expanded_container.append(expanded_box)
+    stack.add_named(expanded_container, "expanded")
     
-    notch_box.append(expanded_content)
+    # Set the visible child to time
+    stack.set_visible_child_name("time")
+    
+    notch_box.append(stack)
+    
     box.append(notch_box)
 
     right_corner = Corner("top-left")
     right_corner.set_size_request(20, 30)
     right_corner.set_valign(Gtk.Align.START)
     right_corner.set_vexpand(False)
-    right_corner.add_css_class("corner")
+    right_corner.get_style_context().add_class("corner")
     box.append(right_corner)
 
     def update_time():
         time_label.set_label(datetime.datetime.now().strftime("%I:%M %p"))
         return True
-
+    
+    is_expanded = False
     GLib.timeout_add_seconds(1, update_time)
     update_time()
+
+    def toggle_expansion(button):
+        nonlocal is_expanded
+        if is_expanded:
+            expanded_box.get_style_context().remove_class("open")
+            stack.set_visible_child_name("time")
+        else:
+            expanded_box.get_style_context().add_class("open")
+            stack.set_visible_child_name("expanded")
+        is_expanded = not is_expanded
     
-    return box, time_button, expanded_content, notch_box
+    time_button.connect("clicked", toggle_expansion)
+    return box, time_button, notch_box
 
 def reload_css(css_provider, window, css_path):
     if not css_provider:
@@ -128,7 +149,7 @@ def on_activate(app):
     LayerShell.set_anchor(window, LayerShell.Edge.LEFT, True)  # Span full width
     LayerShell.set_anchor(window, LayerShell.Edge.RIGHT, True)
 
-    bar_content, time_button, expanded_content, notch_box = create_bar_content()
+    bar_content, time_button, notch_box = create_bar_content()
     window.set_child(bar_content)
 
     bar_height = 30
@@ -152,26 +173,7 @@ def on_activate(app):
 
     window.set_size_request(screen_width, bar_height)
 
-    is_expanded = False
 
-    def toggle_expansion(button):
-        nonlocal is_expanded
-        if is_expanded:
-            # Collapse
-            expanded_content.set_visible(False)
-            notch_box.set_size_request(notch_width, bar_height)
-            window.set_size_request(screen_width, bar_height)
-            GLib.timeout_add(50, lambda: window.queue_resize())
-        else:
-            # Expand as overlay
-            notch_box.set_size_request(notch_width, expanded_height)
-            window.set_size_request(screen_width, expanded_height)
-            expanded_content.set_visible(True)
-            GLib.timeout_add(50, lambda: window.queue_resize())
-        
-        is_expanded = not is_expanded
-
-    time_button.connect("clicked", toggle_expansion)
 
     css_provider = load_css()
     if not css_provider:

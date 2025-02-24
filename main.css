@@ -8,6 +8,7 @@
     padding: 0;
     border: none;
     box-shadow: none;
+    
 }
 
 #notch-box {
@@ -19,7 +20,9 @@
     box-shadow: none;
     min-width: 200px;
     min-height: 30px; /* Only set minimum height */
-    transition: min-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Updated transition to animate both min-height and min-width */
+    transition: all 0.5s cubic-bezier(0.5, 0.25, 0, 1);
+
 }
 
 #bar-window button {
@@ -38,6 +41,11 @@ window {
     border: none;
     box-shadow: none;
     background-color: transparent;
+}
+
+#notch-box.expanded {
+    min-width: 500px;
+    min-height: 500px;
 }
 
 #corner-container {
@@ -69,11 +77,6 @@ window {
     background: transparent;
 }
 
-.expanded-content {
-    background-color: #000;
-    transition: opacity 0.3s ease;
-}
-
 #notification-center {
     padding: 8px;
     margin: 8px;
@@ -97,23 +100,14 @@ calendar {
     background-color: rgba(255, 255, 255, 0.2);
 }
 
-.notification {
-    padding: 10px;
-    background: black;
-    border-radius: 5px;
-    margin: 5px;
+#expanded-content{
+    margin: -800px;
+    transition: all 0.5s cubic-bezier(0.5, 0.25, 0, 1);
+    padding: 4px;
+    overflow: hidden;
 }
 
-.notification-title {
-    font-weight: bold;
-    color: #ffffff;
-}
 
-.notification-message {
-    color: #cccccc;
-}
-
-.notification-close {
-    padding: 0 5px;
-    margin: 0;
+#expanded-content.open{
+    margin: 0px;
 }
