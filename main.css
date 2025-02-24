@@ -1,0 +1,98 @@
+/* notch.css */
+#bar-window {
+    color: #fff;
+    border-radius: 8px;
+    font-size: 14px;
+    background-color: transparent;
+    margin: 0;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+}
+
+#notch-box {
+    background-color: #000;
+    border-radius: 0 0 16px 16px; /* Top has no rounded border */
+    margin: 0;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+    min-width: 200px;
+    min-height: 30px; /* Only set minimum height */
+    transition: min-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#bar-window button {
+    padding: 5px 10px;
+    margin: 0 2px;
+    border: none;
+    background-color: transparent;
+    color: #fff;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+window {
+    margin: 0;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+    background-color: transparent;
+}
+
+#corner-container {
+    padding: 0;
+    margin: 0;
+}
+
+#notch-corner-left,
+#notch-corner-right {
+    margin: 0;
+    padding: 0;
+}
+
+#notch-box {
+    margin: 0;
+    padding: 0;
+}
+
+/* Add specific styling for corner widgets */
+.corner {
+    margin: 0;
+    padding: 0;
+    height: 30px;
+    min-height: 30px;
+    max-height: 30px;
+}
+
+.transparent-background {
+    background: transparent;
+}
+
+.expanded-content {
+    background-color: #000;
+    transition: opacity 0.3s ease;
+}
+
+#notification-center {
+    padding: 8px;
+    margin: 8px;
+}
+
+calendar {
+    padding: 8px;
+    margin: 8px;
+    color: #fff;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 8px;
+}
+
+#dnd-button, #clear-button {
+    width: 100%;
+    margin: 4px 0;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+#dnd-button:hover, #clear-button:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
