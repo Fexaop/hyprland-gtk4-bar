@@ -96,3 +96,24 @@ calendar {
 #dnd-button:hover, #clear-button:hover {
     background-color: rgba(255, 255, 255, 0.2);
 }
+
+.notification {
+    padding: 10px;
+    background: black;
+    border-radius: 5px;
+    margin: 5px;
+}
+
+.notification-title {
+    font-weight: bold;
+    color: #ffffff;
+}
+
+.notification-message {
+    color: #cccccc;
+}
+
+.notification-close {
+    padding: 0 5px;
+    margin: 0;
+}
