@@ -22,7 +22,7 @@
 
 #bar-window button {
   padding: 5px 10px;
-  margin: 0;
+  margin: 0 2px;
   border: none;
   background-color: transparent;
   color: #fff;

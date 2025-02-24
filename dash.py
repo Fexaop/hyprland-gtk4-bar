@@ -1,11 +1,21 @@
-# dash.py
 import gi
 
 gi.require_version('Gtk', '4.0')
-from gi.repository import Gtk
+from gi.repository import Gtk, Gdk
 
+def load_css():
+    css_provider = Gtk.CssProvider()
+    css_provider.load_from_path('dash.css')  # Make sure this path is correct
+    Gtk.StyleContext.add_provider_for_display(
+        Gdk.Display.get_default(),
+        css_provider,
+        Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+    )
 
 def create_dashboard_content():
+    # Load CSS first
+    load_css()
+    
     grid = Gtk.Grid()
     grid.set_column_spacing(10)
     grid.set_row_spacing(10)
@@ -18,7 +28,7 @@ def create_dashboard_content():
     calendar = Gtk.Calendar()
     grid.attach(calendar, 0, 0, 1, 1)
 
-    # Notification History (Placeholder)
+    # Notification History
     notification_label = Gtk.Label(label="Notification History")
     notification_label.set_halign(Gtk.Align.START)
     notification_label.set_hexpand(True)
@@ -37,7 +47,7 @@ def create_dashboard_content():
     grid.attach(notification_label, 1, 0, 1, 1)
     grid.attach(notification_scrolled, 1, 1, 1, 1)
 
-    # Do Not Disturb (Placeholder)
+    # Do Not Disturb
     dnd_label = Gtk.Label(label="Do Not Disturb")
     dnd_switch = Gtk.Switch()
     dnd_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
