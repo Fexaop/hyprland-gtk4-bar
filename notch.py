@@ -17,7 +17,7 @@ from gi.repository import Gtk, GLib, Gdk, Gio
 from gi.repository import Gtk4LayerShell as LayerShell
 import datetime
 from widgets.corner import Corner
-from music import MusicPlayer
+from modules.music import MusicPlayer
 
 def load_css():
     css_provider = Gtk.CssProvider()
