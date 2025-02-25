@@ -28,6 +28,7 @@
     min-height: 45px;
     min-width: 360px;
     border-radius: 0 0 36px 36px;
+    opacity: 1;
   }
 #dashboard,
 #notification-box{
@@ -39,7 +40,7 @@
 #notification-box.open,
 #dashboard.open{
   opacity: 1;
-  margin: 0px;
+  margin: 10px;
 }
 
 /* Notification styling */

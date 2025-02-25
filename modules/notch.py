@@ -103,12 +103,12 @@ class Notch(Gtk.Box):
     
     def show_notification(self):
         self.stack.add_css_class("notification")
-        self.notification_center.notification_view.notification_box.add_css_class("open")
+        self.notification_center.notification_view.add_css_class("open")
         self.stack.set_visible_child_name('notification')
         
     def hide_notification(self):
         self.stack.remove_css_class("notification")
-        self.notification_center.notification_view.notification_box.remove_css_class("open")
+        self.notification_center.notification_view.remove_css_class("open")
         self.stack.set_visible_child_name('active-event-box')
         GLib.timeout_add(300, self.collapse_notch)
     
@@ -124,4 +124,4 @@ class Notch(Gtk.Box):
         # Reset corner heights to normal
         self.left_corner.set_size_request(20, 30)
         self.right_corner.set_size_request(20, 30)
-        
+

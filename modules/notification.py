@@ -1,6 +1,7 @@
 import gi
 gi.require_version('Gtk', '4.0')
-from gi.repository import Gtk, GLib, GdkPixbuf, Gdk
+gi.require_version('Pango', '1.0')
+from gi.repository import Gtk, GLib, GdkPixbuf, Gdk, Pango
 import socket
 import json
 import threading
@@ -13,91 +14,81 @@ class NotificationView(Gtk.Box):
     def __init__(self, notification_center):
         super().__init__(
             orientation=Gtk.Orientation.VERTICAL,
-            name="notification-view"
-        )
-        
-        self.notification_center = notification_center
-        self.set_hexpand(True)
-        
-        # Container for the actual notification
-        self.notification_box = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL,
             name="notification-box"
         )
-        self.notification_box.set_halign(Gtk.Align.CENTER)
-        self.notification_box.set_valign(Gtk.Align.CENTER)
-        self.notification_box.set_spacing(10)
+        self.notification_center = notification_center
+        self.container_box = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL,
+            name="notification-container",
+            spacing=8
+        )
+        self.notification_image = Gtk.Image(
+            name="notification-image",
+        )
+
+        self.container_box.set_hexpand(True)
+        self.notification_text = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            name="notification-text"
+        )
+        self.notification_text.set_valign(Gtk.Align.CENTER)
+        # Summary box with app name
+        self.summary_box = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL,
+            name="notification-summary-box"
+        )
         
-        # Left side: App icon and image
-        self.left_side = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, name="notification-left-side")
-        self.left_side.set_spacing(8)
+        self.sender_label = Gtk.Label(name="notification-summary")
+        self.sender_label.set_halign(Gtk.Align.START)
+        self.sender_label.set_ellipsize(Pango.EllipsizeMode.END)
         
-        # App icon
-        self.app_icon = Gtk.Image(name="notification-app-icon")
-        self.app_icon.set_size_request(24, 24)
+        self.app_name_label = Gtk.Label(name="notification-app-name")
+        self.app_name_label.set_halign(Gtk.Align.START)
+        self.app_name_label.set_ellipsize(Pango.EllipsizeMode.END)
         
-        # Notification image (scaled down)
-        self.notification_image = Gtk.Picture(name="notification-image")
-        self.notification_image.set_size_request(80, 60)  # Smaller size
-        self.notification_image.set_halign(Gtk.Align.CENTER)
-        self.notification_image.set_visible(False)  # Hidden by default
-        
-        self.left_side.append(self.app_icon)
-        self.left_side.append(self.notification_image)
-        
-        # Right side: Content (title, body)
-        self.content_area = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, name="notification-content-area")
-        self.content_area.set_spacing(4)
-        self.content_area.set_hexpand(True)
-        
-        # Title label
-        self.title_label = Gtk.Label(name="notification-title")
-        self.title_label.set_halign(Gtk.Align.START)
-        self.title_label.set_hexpand(True)
-        self.title_label.get_style_context().add_class("notification-title")
+        self.summary_box.append(self.sender_label)
+        self.summary_box.append(self.app_name_label)
         
         # Body label
-        self.body_label = Gtk.Label(name="notification-body")
+        self.body_label = Gtk.Label()
         self.body_label.set_halign(Gtk.Align.START)
-        self.body_label.set_wrap(True)
-        self.body_label.set_max_width_chars(30)
-        self.body_label.get_style_context().add_class("notification-body")
         
-        # Add title and body to content area
-        self.content_area.append(self.title_label)
-        self.content_area.append(self.body_label)
+        # Add boxes to notification text
+        self.notification_text.append(self.summary_box)
+        self.notification_text.append(self.body_label)
         
-        # Close button (text-based at the bottom)
-        self.close_button = Gtk.Button(label="Close", name="notification-close-button")
+        # Add everything to container
+        self.container_box.append(self.notification_image)
+        self.container_box.append(self.notification_text)
+        # Third box: Close button
+        self.close_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, name="notification-close-box")
+        self.close_box.set_valign(Gtk.Align.CENTER)
+        
+        self.close_button = Gtk.Button(label="×", name="notification-close-button")
         self.close_button.set_halign(Gtk.Align.CENTER)
         self.close_button.connect("clicked", self.on_close_clicked)
-        self.close_button.get_style_context().add_class("flat")
+        self.close_button.get_style_context().add_class("circular")
         
-        # Construct the widget hierarchy
-        self.notification_box.append(self.left_side)
-        self.notification_box.append(self.content_area)
+        self.close_box.append(self.close_button)
+        self.container_box.append(self.close_box)
+        # Then put the container box in the notification box
+        self.append(self.container_box)
         
-        self.append(self.notification_box)
-        self.append(self.close_button)  # Close button at the bottom
         
         # Add click gesture for the notification box
         gesture = Gtk.GestureClick()
         gesture.connect("pressed", self.on_notification_click)
-        self.notification_box.add_controller(gesture)
+        self.container_box.add_controller(gesture)
         
     def update_notification(self, notification):
         """Update the notification view with new data"""
         self.notification_id = notification.get("id")
-        self.title_label.set_text(notification.get("summary", ""))
-        self.body_label.set_text(notification.get("body", ""))
         
-        # Handle app icon
-        icon_name = notification.get("app_icon")
-        if icon_name and icon_name != "":
-            self.app_icon.set_from_icon_name(icon_name)
-            self.app_icon.set_visible(True)
-        else:
-            self.app_icon.set_visible(False)
+        # Set the text labels
+        self.sender_label.set_text(notification.get("summary", ""))
+        self.app_name_label.set_text(notification.get("app_name", ""))
+        print(notification.get("app_name", ""))
+        self.body_label.set_text(notification.get("body", ""))
         
         # Handle notification image if present
         if "image_data" in notification and notification["image_data"]:
@@ -108,7 +99,7 @@ class NotificationView(Gtk.Box):
                 os.close(fd)
                 
                 # Load the image from file and display it
-                self.notification_image.set_filename(temp_path)
+                self.notification_image.set_from_file(temp_path)
                 self.notification_image.set_visible(True)
                 
                 # Clean up the temp file when done
@@ -118,7 +109,6 @@ class NotificationView(Gtk.Box):
                 self.notification_image.set_visible(False)
         else:
             self.notification_image.set_visible(False)
-            
     def on_notification_click(self, gesture, n_press, x, y):
         """Handle click on notification body"""
         # Only dismiss when clicking on the notification body, not buttons
@@ -204,7 +194,7 @@ class NotificationCenter:
         self.notch.show_notification()
         
         # Auto-hide after a delay
-        GLib.timeout_add(1000, self.hide_notification)
+        GLib.timeout_add(8000, self.hide_notification)
     
     def hide_notification(self):
         """Hide the current notification"""
