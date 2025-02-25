@@ -13,7 +13,7 @@ import datetime
 from widgets.corner import Corner
 from modules.dashboard import Dashboard
 from modules.music import MusicPlayer
-from modules.notifications import NotificationCenter
+from modules.notification import NotificationCenter
 
 class Notch(Gtk.Box):
     def __init__(self, **kwargs):
@@ -21,12 +21,10 @@ class Notch(Gtk.Box):
             name="notch-box",
         )
         self.set_halign(Gtk.Align.CENTER)
-        self.set_valign(Gtk.Align.START)  # Always at top
+        self.set_valign(Gtk.Align.CENTER)  # Always at top
         
         # Track the original size
         self.normal_height = 30  # Default height for the notch
-        self.expanded = False
-        
         # Pass self to Dashboard so it can access the stack later.
         self.dashboard = Dashboard(notch=self)
         self.active_event_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, name="active-event-box")
@@ -37,7 +35,7 @@ class Notch(Gtk.Box):
         
         # Setup corners with exact sizing
         self.left_corner = Corner("top-right")
-        self.left_corner.set_size_request(20, self.normal_height)
+        self.left_corner.set_size_request(20, 30)
         self.left_corner.set_valign(Gtk.Align.START)
         self.left_corner.set_vexpand(False)
         self.left_corner.get_style_context().add_class("corner")
@@ -74,7 +72,7 @@ class Notch(Gtk.Box):
         
         # Right corner with exact sizing
         self.right_corner = Corner("top-left")
-        self.right_corner.set_size_request(20, self.normal_height)
+        self.right_corner.set_size_request(20, 30)
         self.right_corner.set_valign(Gtk.Align.START)
         self.right_corner.set_vexpand(False)
         self.right_corner.get_style_context().add_class("corner")
@@ -104,26 +102,14 @@ class Notch(Gtk.Box):
         return True
     
     def show_notification(self):
-        """Show a notification in the notch"""
-        # Expand the notch
-        if not self.expanded:
-            self.left_corner.set_size_request(20, self.normal_height + 95)  # Add space for notification
-            self.right_corner.set_size_request(20, self.normal_height + 95)
-            self.expanded = True
-            
-            # Add expanded class for styling
-            self.get_style_context().add_class("expanded")
-        
-        # Show the notification
+        self.stack.add_css_class("notification")
+        self.notification_center.notification_view.notification_box.add_css_class("open")
         self.stack.set_visible_child_name('notification')
-        self.notification_center.notification_view.add_css_class("visible")
-    
-    def hide_notification(self):
-        """Hide the current notification"""
-        # First hide the notification with animation
-        self.notification_center.notification_view.remove_css_class("visible")
         
-        # After animation completes, collapse the notch
+    def hide_notification(self):
+        self.stack.remove_css_class("notification")
+        self.notification_center.notification_view.notification_box.remove_css_class("open")
+        self.stack.set_visible_child_name('active-event-box')
         GLib.timeout_add(300, self.collapse_notch)
     
     def collapse_notch(self):
@@ -136,10 +122,6 @@ class Notch(Gtk.Box):
         self.stack.set_visible_child_name('active-event-box')
         
         # Reset corner heights to normal
-        self.left_corner.set_size_request(20, self.normal_height)
-        self.right_corner.set_size_request(20, self.normal_height)
+        self.left_corner.set_size_request(20, 30)
+        self.right_corner.set_size_request(20, 30)
         
-        # Remove expanded class
-        self.get_style_context().remove_class("expanded")
-        self.expanded = False
-        return False
