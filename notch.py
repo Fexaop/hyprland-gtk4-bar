@@ -46,6 +46,7 @@ def create_notification_center():
     notif_box.append(clear_button)
     
     return notif_box
+
 def create_bar_content():
     box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0, name="bar-window")
     box.set_halign(Gtk.Align.CENTER)
@@ -76,13 +77,24 @@ def create_bar_content():
     expanded_container.set_overflow(Gtk.Overflow.HIDDEN)
     
     expanded_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10, name="expanded-content")
+    
+    # Create a duplicate time button for the expanded view
+    expanded_time_button = Gtk.Button()
+    expanded_time_label = Gtk.Label(label="")
+    expanded_time_button.set_child(expanded_time_label)
+    
     notification_center = create_notification_center()
-    expanded_box.append(notification_center)
     right_side = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+    
+    # Add the expanded time button at the top of the right side
+    right_side.append(expanded_time_button)
+    
     calendar = Gtk.Calendar(name="calendar")
     right_side.append(calendar)
     music_player = MusicPlayer()
     right_side.append(music_player)
+    
+    expanded_box.append(notification_center)
     expanded_box.append(right_side)
     
     # Add expanded_box to the container
@@ -104,7 +116,9 @@ def create_bar_content():
     box.append(right_corner)
 
     def update_time():
-        time_label.set_label(datetime.datetime.now().strftime("%I:%M %p"))
+        current_time = datetime.datetime.now().strftime("%I:%M %p")
+        time_label.set_label(current_time)
+        expanded_time_label.set_label(current_time)
         return True
     
     is_expanded = False
@@ -121,7 +135,10 @@ def create_bar_content():
             stack.set_visible_child_name("expanded")
         is_expanded = not is_expanded
     
+    # Connect both time buttons to the toggle function
     time_button.connect("clicked", toggle_expansion)
+    expanded_time_button.connect("clicked", toggle_expansion)
+    
     return box, time_button, notch_box
 
 def reload_css(css_provider, window, css_path):
