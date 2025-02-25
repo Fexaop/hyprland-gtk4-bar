@@ -1,138 +1,161 @@
-#!/usr/bin/env python3
-import gi
-gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk, GLib
-
 import dbus
 import dbus.service
 import dbus.mainloop.glib
-
-# -------------------------------
-# GTK Notification UI Components
-# -------------------------------
-
-class Notification:
-    def __init__(self, title, message, parent_box, remove_callback):
-        self.widget = self._create_widget(title, message, remove_callback)
-        self.parent_box = parent_box
-        self.parent_box.append(self.widget)
-
-    def _create_widget(self, title, message, remove_callback):
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
-        box.add_css_class("notification")
-
-        title_label = Gtk.Label(label=title)
-        title_label.add_css_class("notification-title")
-        box.append(title_label)
-
-        message_label = Gtk.Label(label=message)
-        message_label.add_css_class("notification-message")
-        box.append(message_label)
-
-        close_button = Gtk.Button(label="×")
-        close_button.add_css_class("notification-close")
-        close_button.connect("clicked", lambda btn: remove_callback(self))
-        box.append(close_button)
-
-        box.set_visible(True)
-        return box
-
-    def remove(self):
-        self.parent_box.remove(self.widget)
-
-class NotificationManager:
-    def __init__(self, parent_box, resize_callback):
-        self.notifications = []
-        self.parent_box = parent_box
-        self.resize_callback = resize_callback
-        self.max_visible = 3
-
-    def add_notification(self, title, message, timeout=2000):
-        def do_add():
-            print("Adding notification:", title)
-            notification = Notification(title, message, self.parent_box, self.remove_notification)
-            self.notifications.append(notification)
-            
-            if len(self.notifications) > self.max_visible:
-                old_notif = self.notifications.pop(0)
-                old_notif.remove()
-                print("Removed oldest notification due to max limit")
-            
-            self.resize_callback(len(self.notifications))
-            GLib.timeout_add(timeout, self.remove_notification, notification)
-            return False  # Run the idle callback only once
-        GLib.idle_add(do_add)
-
-    def remove_notification(self, notification):
-        if notification in self.notifications:
-            print("Removing notification:", notification)
-            self.notifications.remove(notification)
-            notification.remove()
-            self.resize_callback(len(self.notifications))
-        return False  # Ensure the timeout callback runs only once
-
-    def clear_all(self):
-        for notif in self.notifications[:]:
-            self.remove_notification(notif)
-
-# -----------------------------------------
-# DBus Notification Daemon Implementation
-# -----------------------------------------
+from gi.repository import GLib
+import socket
+import json
+import time
+import base64
+import os
+from PIL import Image
+import io
 
 class NotificationDaemon(dbus.service.Object):
-    def __init__(self, bus, object_path, manager):
+    def __init__(self, bus, object_path):
         super().__init__(bus, object_path)
-        self.manager = manager
-
+        # Setup UDP broadcast socket
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        self.port = 6942
+        self.notifications = []  # Store recent notifications
+        self.next_id = 1  # Start with ID 1
+        self.temp_dir = "/tmp/notch-notifications"
+        
+        # Create temp directory for images if it doesn't exist
+        if not os.path.exists(self.temp_dir):
+            os.makedirs(self.temp_dir)
+        
     @dbus.service.method("org.freedesktop.Notifications",
                          in_signature="susssasa{sv}i", out_signature="u")
     def Notify(self, app_name, replaces_id, app_icon, summary, body, actions, hints, expire_timeout):
-        print("DBus Notification received!")
-        print(f"Application: {app_name}")
-        print(f"Summary: {summary}")
-        print(f"Body: {body}\n")
-        # Use expire_timeout if valid, else default to 2000ms.
-        timeout = expire_timeout if expire_timeout > 0 else 2000
-        # Use the summary as the title and body as the message for our UI notification.
-        self.manager.add_notification(summary, body, timeout=timeout)
-        return 0
+        # Use either the replaces_id or generate a new ID within UInt32 bounds
+        if replaces_id > 0:
+            notification_id = replaces_id
+        else:
+            notification_id = self.next_id
+            self.next_id = (self.next_id + 1) % 4294967295  # Stay within UInt32 bounds
+        
+        # Process image data
+        image_path = None
+        
+        # Check for image-data, image_data or icon_data
+        if 'image-data' in hints or 'image_data' in hints or 'icon_data' in hints:
+            image_data = None
+            if 'image-data' in hints:
+                image_data = hints['image-data']
+            elif 'image_data' in hints:
+                image_data = hints['image_data']
+            elif 'icon_data' in hints:
+                image_data = hints['icon_data']
+            
+            if image_data:
+                try:
+                    # Extract image data (width, height, rowstride, has_alpha, bits_per_sample, channels, data)
+                    width, height, rowstride, has_alpha, bits_per_sample, channels, raw_data = image_data
+                    
+                    # Convert to PIL image and save as temp file
+                    image_path = f"{self.temp_dir}/notification_{notification_id}.png"
+                    
+                    # Create PIL image from raw data
+                    if has_alpha:
+                        mode = 'RGBA'
+                    else:
+                        mode = 'RGB'
+                    
+                    # Convert dbus.Array to bytes
+                    byte_data = bytes(raw_data)
+                    
+                    # Create the image
+                    img = Image.frombytes(mode, (width, height), byte_data)
+                    img.save(image_path)
+                    
+                    print(f"Saved notification image to {image_path}")
+                    
+                except Exception as e:
+                    print(f"Error processing image data: {e}")
+                    image_path = None
+        
+        # Check for image-path
+        elif 'image-path' in hints:
+            image_path = hints['image-path']
+            if not os.path.exists(image_path):
+                image_path = None
+        
+        # Create notification object
+        message = {
+            "id": notification_id,
+            "app_name": app_name,
+            "app_icon": app_icon,
+            "summary": summary,
+            "body": body,
+            "timestamp": time.time(),
+            "replaces_id": replaces_id,
+            "image_path": image_path
+        }
+        
+        # Store notification
+        if replaces_id > 0:
+            # Replace existing notification if it exists
+            for i, notif in enumerate(self.notifications):
+                if notif.get("id") == replaces_id:
+                    self.notifications[i] = message
+                    break
+            else:
+                self.notifications.append(message)
+        else:
+            self.notifications.append(message)
+        
+        # Keep only the 10 most recent notifications
+        self.notifications = sorted(self.notifications, key=lambda x: x["timestamp"], reverse=True)[:10]
+        
+        try:
+            # Convert image_path to base64 if it exists for easier transmission
+            if image_path and os.path.exists(image_path):
+                with open(image_path, 'rb') as img_file:
+                    img_data = img_file.read()
+                    message["image_data"] = base64.b64encode(img_data).decode('utf-8')
+            
+            # Broadcast the notification
+            broadcast_msg = json.dumps(message).encode('utf-8')
+            self.sock.sendto(broadcast_msg, ('255.255.255.255', self.port))
+            print(f"Notification sent via UDP: {app_name} - {summary}")
+        except Exception as e:
+            print(f"Broadcast error: {e}")
+            
+        return notification_id
 
     @dbus.service.method("org.freedesktop.Notifications",
                          in_signature="", out_signature="as")
     def GetCapabilities(self):
-        return ["body"]
+        return ["body", "icon-static", "actions", "image"]
 
     @dbus.service.method("org.freedesktop.Notifications",
                          in_signature="", out_signature="ssss")
     def GetServerInformation(self):
-        return ("PythonGTKNotificationDaemon", "YourVendor", "1.0", "1.2")
-
-# -------------------------------
-# Main Application Setup
-# -------------------------------
+        return ("PythonNotificationDaemon", "YourVendor", "1.0", "1.2")
+        
+    @dbus.service.method("org.freedesktop.Notifications",
+                         in_signature="u", out_signature="")
+    def CloseNotification(self, id):
+        for i, notif in enumerate(self.notifications):
+            if notif.get("id") == id:
+                # Remove any associated image file
+                image_path = notif.get("image_path")
+                if image_path and os.path.exists(image_path):
+                    try:
+                        os.remove(image_path)
+                    except:
+                        pass
+                del self.notifications[i]
+                break
 
 if __name__ == '__main__':
-    # Create GTK window and UI box.
-    win = Gtk.Window()
-    win.set_default_size(300, 200)
-    parent_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
-    win.set_child(parent_box)
-
-    def resize_callback(count):
-        print(f"Notifications count: {count}")
-
-    manager = NotificationManager(parent_box, resize_callback)
-
-    # Integrate DBus with the GLib main loop (which GTK uses)
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     session_bus = dbus.SessionBus()
-
-    # Register our daemon under the standard notifications bus name.
-    # If another notification daemon is running, you might need to disable it.
+    
     bus_name = dbus.service.BusName("org.freedesktop.Notifications", session_bus)
-    daemon = NotificationDaemon(session_bus, "/org/freedesktop/Notifications", manager)
-
-    win.connect("destroy", Gtk.main_quit)
-    win.show()
-
-    Gtk.main()
+    daemon = NotificationDaemon(session_bus, "/org/freedesktop/Notifications")
+    
+    print(f"Python notification daemon is running and broadcasting on port {daemon.port}...")
+    loop = GLib.MainLoop()
+    loop.run()
