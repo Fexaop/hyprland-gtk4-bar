@@ -92,7 +92,7 @@ class NotificationDaemon(dbus.service.Object):
             "replaces_id": replaces_id,
             "image_path": image_path
         }
-        
+        print(message)
         # Store notification
         if replaces_id > 0:
             # Replace existing notification if it exists
@@ -118,7 +118,7 @@ class NotificationDaemon(dbus.service.Object):
             # Broadcast the notification
             broadcast_msg = json.dumps(message).encode('utf-8')
             self.sock.sendto(broadcast_msg, ('255.255.255.255', self.port))
-            print(f"Notification sent via UDP: {app_name} - {summary}")
+            print(f"Notification sent via UDP: {app_name} - {summary} {image_path}" )
         except Exception as e:
             print(f"Broadcast error: {e}")
             

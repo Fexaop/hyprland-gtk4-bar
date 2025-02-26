@@ -2,11 +2,10 @@ import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Pango', '1.0')
 from gi.repository import Gtk, GLib, GdkPixbuf, Gdk, Pango
-import socket
-import json
-import threading
-import time
-import base64
+
+# Import notification service instead of using sockets
+from service.notification import Notifications, Notification, NotificationCloseReason
+
 import tempfile
 import os
 
@@ -74,7 +73,6 @@ class NotificationView(Gtk.Box):
         # Then put the container box in the notification box
         self.append(self.container_box)
         
-        
         # Add click gesture for the notification box
         gesture = Gtk.GestureClick()
         gesture.connect("pressed", self.on_notification_click)
@@ -82,33 +80,49 @@ class NotificationView(Gtk.Box):
         
     def update_notification(self, notification):
         """Update the notification view with new data"""
-        self.notification_id = notification.get("id")
+        self.notification_id = notification.id
         
         # Set the text labels
-        self.sender_label.set_text(notification.get("summary", ""))
-        self.app_name_label.set_text(notification.get("app_name", ""))
-        print(notification.get("app_name", ""))
-        self.body_label.set_text(notification.get("body", ""))
+        self.sender_label.set_text(notification.summary)
+        self.app_name_label.set_text(notification.app_name)
+        print(notification.app_name)
+        self.body_label.set_text(notification.body)
         
-        # Handle notification image if present
-        if "image_data" in notification and notification["image_data"]:
-            try:
-                # Create a temporary file to store the image
-                fd, temp_path = tempfile.mkstemp(suffix=".png")
-                os.write(fd, base64.b64decode(notification["image_data"]))
-                os.close(fd)
-                
-                # Load the image from file and display it
-                self.notification_image.set_from_file(temp_path)
-                self.notification_image.set_visible(True)
-                
-                # Clean up the temp file when done
-                GLib.timeout_add_seconds(10, lambda: os.unlink(temp_path) if os.path.exists(temp_path) else None)
-            except Exception as e:
-                print(f"Error displaying notification image: {e}")
-                self.notification_image.set_visible(False)
+        # Handle notification image or app icon if present
+        if notification.image_texture:
+            # Use the image data from notification
+            self.notification_image.set_from_paintable(notification.image_texture)
+            self.notification_image.set_visible(True)
+        elif notification.app_icon and notification.app_icon.strip():
+            # Try to use app_icon as fallback
+            if os.path.isfile(notification.app_icon):
+                # If app_icon is a file path
+                try:
+                    self.notification_image.set_from_file(notification.app_icon)
+                    self.notification_image.set_visible(True)
+                except Exception as e:
+                    print(f"Error loading icon from file {notification.app_icon}: {e}")
+                    self._try_load_icon_name(notification.app_icon)
+            else:
+                # If app_icon is an icon name
+                self._try_load_icon_name(notification.app_icon)
         else:
+            # No image or icon available
             self.notification_image.set_visible(False)
+            
+    def _try_load_icon_name(self, icon_name):
+        """Try to load an icon by name from theme"""
+        try:
+            # Try standard sizes in descending order
+            for size in [64, 48, 32, 24, 16]:
+                self.notification_image.set_from_icon_name(icon_name)
+                self.notification_image.set_pixel_size(size)
+                self.notification_image.set_visible(True)
+                return
+        except Exception as e:
+            print(f"Error loading icon {icon_name}: {e}")
+            self.notification_image.set_visible(False)
+            
     def on_notification_click(self, gesture, n_press, x, y):
         """Handle click on notification body"""
         # Only dismiss when clicking on the notification body, not buttons
@@ -123,55 +137,27 @@ class NotificationView(Gtk.Box):
         return True
 
 class NotificationCenter:
-    # Rest of the NotificationCenter class remains the same
     def __init__(self, notch):
         self.notch = notch
-        self.port = 6942
         self.current_notification = None
         self.notification_queue = []
         self.is_showing = False
         self.notification_view = NotificationView(self)
         
-        # Setup UDP listener socket
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # Use the DBus notification service instead of sockets
+        self.notifications = Notifications()
+        self.notifications.connect('notification-added', self.on_notification_added)
         
-        # Start the listener thread
-        self.running = True
-        self.thread = threading.Thread(target=self.listen_for_notifications)
-        self.thread.daemon = True
-        self.thread.start()
-        
-    def listen_for_notifications(self):
-        """Listen for UDP broadcasts from the notification daemon"""
-        try:
-            self.sock.bind(('', self.port))
-            print(f"Listening for notifications on port {self.port}")
+    def on_notification_added(self, _, notification_id):
+        """Handle new notification from service"""
+        notification = self.notifications.get_notification_from_id(notification_id)
+        if notification:
+            print(f"Received notification: {notification.summary}")
             
-            while self.running:
-                try:
-                    data, addr = self.sock.recvfrom(65535)  # Increased buffer size for images
-                    notification = json.loads(data.decode('utf-8'))
-                    # Process notification on the main thread
-                    GLib.idle_add(self.process_notification, notification)
-                except Exception as e:
-                    print(f"Error receiving notification: {e}")
-                    time.sleep(1)  # Prevent busy loop on error
-        except Exception as e:
-            print(f"Socket error: {e}")
-        finally:
-            self.sock.close()
-    
-    def process_notification(self, notification):
-        """Process a received notification"""
-        print(f"Received notification: {notification['summary']}")
-        
-        # Add to queue and show if not already showing
-        self.notification_queue.append(notification)
-        if not self.is_showing:
-            self.show_next_notification()
-        
-        return False  # for GLib.idle_add
+            # Add to queue and show if not already showing
+            self.notification_queue.append(notification)
+            if not self.is_showing:
+                self.show_next_notification()
     
     def prepare_notification(self, notification):
         """Process and add notification to the view before showing it"""
@@ -199,6 +185,13 @@ class NotificationCenter:
     def hide_notification(self):
         """Hide the current notification"""
         if self.is_showing:
+            # Close the notification with proper reason if it exists
+            if self.current_notification:
+                self.notifications.close_notification(
+                    self.current_notification.id, 
+                    NotificationCloseReason.EXPIRED
+                )
+            
             self.notch.hide_notification()
             self.is_showing = False
             
