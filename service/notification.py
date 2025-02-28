@@ -463,41 +463,7 @@ class Notification(GObject.Object):
             return Gdk.Texture.new_for_pixbuf(pixbuf)
         return None
 
-def print_notification_details(notification: Notification, prefix=""):
-    """Print detailed information about a notification for debugging"""
-    print(f"{prefix}╔══════════════════════════════════════════")
-    print(f"{prefix}║ Notification #{notification.id}")
-    print(f"{prefix}╠══════════════════════════════════════════")
-    print(f"{prefix}║ App: {notification.app_name}")
-    print(f"{prefix}║ App Icon: {notification.app_icon}")
-    print(f"{prefix}║ Summary: {notification.summary}")
-    print(f"{prefix}║ Body: {notification.body[:100]}")
-    if len(notification.body) > 100:
-        print(f"{prefix}║       ...{len(notification.body)-100} more characters")
-    print(f"{prefix}║ Urgency: {notification.urgency} ({['Low', 'Normal', 'Critical'][notification.urgency] if 0 <= notification.urgency <= 2 else 'Unknown'})")
-    print(f"{prefix}║ Timeout: {notification.timeout}ms")
-    print(f"{prefix}║ Replaces ID: {notification.replaces_id}")
-    
-    if notification.actions:
-        print(f"{prefix}║ Actions:")
-        for action in notification.actions:
-            print(f"{prefix}║   • {action.identifier}: {action.label}")
-    
-    if notification.image_file:
-        print(f"{prefix}║ Image file: {notification.image_file}")
-    
-    if notification.image_pixmap:
-        pixmap = notification.image_pixmap
-        print(f"{prefix}║ Image data:")
-        print(f"{prefix}║   • Dimensions: {pixmap.width}×{pixmap.height}")
-        print(f"{prefix}║   • Alpha: {'Yes' if pixmap.has_alpha else 'No'}")
-        print(f"{prefix}║   • Bits per sample: {pixmap.bits_per_sample}")
-        print(f"{prefix}║   • Channels: {pixmap.channels}")
-    
-    print(f"{prefix}╚══════════════════════════════════════════")
-    print()
 
-# Add debug print capability to Notifications class
 class Notifications(GObject.Object):
     """A server for watching in-coming notifications from running applications"""
     
@@ -524,17 +490,10 @@ class Notifications(GObject.Object):
     def _on_notification_added(self, _, notification_id: int):
         """Handler for notification-added signal"""
         notif = self.get_notification_from_id(notification_id)
-        print(f"\n>>> New notification received:")
-        print_notification_details(notif, "  ")
         self.emit('changed')
     
     def _on_notification_removed(self, _, notification_id: int):
         """Handler for notification-removed signal"""
-        if notification_id in self._notifications:
-            notif = self._notifications[notification_id]
-            print(f"\n<<< Notification #{notification_id} removed: {notif.app_name}: {notif.summary}")
-        else:
-            print(f"\n<<< Notification #{notification_id} removed (already gone)")
         self._notifications.pop(notification_id, None)
         self.emit('changed')
 
@@ -710,15 +669,6 @@ class Notifications(GObject.Object):
         """A list of all the notifications received by this server"""
         return self._notifications
 
-    def print_all_notifications(self):
-        """Print all current notifications for debugging"""
-        print("\n=== CURRENT NOTIFICATIONS ===")
-        if not self._notifications:
-            print("No notifications.")
-        for notif_id, notif in self._notifications.items():
-            print_notification_details(notif, "  ")
-        print("=============================\n")
-
 # Add main function for standalone execution
 if __name__ == "__main__":
     import signal
@@ -729,32 +679,14 @@ if __name__ == "__main__":
     # Create notification server
     notifications = Notifications()
     
-    # Print current notifications every 5 seconds
-    def print_periodic():
-        notifications.print_all_notifications()
-        return True  # Continue timer
-    
-    # Add timer for periodic updates
-    GLib.timeout_add_seconds(5, print_periodic)
-    
     # Handle Ctrl+C gracefully
     def signal_handler(sig, frame):
-        print("\nShutting down notification service...")
         loop.quit()
     
     signal.signal(signal.SIGINT, signal_handler)
-    
-    # Print startup message
-    print("=== Notification Service Started ===")
-    print("Running standalone for debugging")
-    print("Press Ctrl+C to exit")
-    print("Will print all notifications every 5 seconds")
-    print("=====================================")
     
     # Run the main loop
     try:
         loop.run()
     except KeyboardInterrupt:
         pass
-    
-    print("Notification service stopped.")

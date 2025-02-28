@@ -93,18 +93,46 @@ class Notch(Gtk.Box):
         self.time_label.set_text(f"{datetime.datetime.now():%H:%M:%S}")
         return True  # Continue calling
 
+    def open_notch(self, widget):
+        """
+        Opens the specified widget in the notch, closing any currently active widget first.
+        
+        Parameters:
+        widget (str): Widget to open ('dashboard', 'notification', or 'active-event-box')
+        """
+        # Get currently visible widget
+        current = self.stack.get_visible_child_name()
+        
+        # Skip if trying to open the widget that's already open
+        if current == widget:
+            return
+            
+        # First close any currently active widget
+        if current == 'dashboard':
+            self.stack.remove_css_class("dashboard")
+            self.dashboard.remove_css_class("open")
+        elif current == 'notification':
+            self.stack.remove_css_class("notification")
+            self.notification_center.notification_view.remove_css_class("open")
+        
+        # Now open the requested widget
+        if widget == 'dashboard':
+            self.stack.add_css_class("dashboard")
+            self.dashboard.add_css_class("open")
+        elif widget == 'notification':
+            self.stack.add_css_class("notification")
+            self.notification_center.notification_view.add_css_class("open")
+        
+        # Set visible child
+        self.stack.set_visible_child_name(widget)
+        
     def on_active_event_box_click(self, gesture, n_press, x, y):
         """Handle click on the active event box to show dashboard"""
-        self.stack.add_css_class("dashboard")
-        self.dashboard.add_css_class("open")
-        self.stack.set_visible_child_name('dashboard')
-        self.dashboard.show()
+        self.open_notch('dashboard')
         return True
     
     def show_notification(self):
-        self.stack.add_css_class("notification")
-        self.notification_center.notification_view.add_css_class("open")
-        self.stack.set_visible_child_name('notification')
+        self.open_notch('notification')
         
     def hide_notification(self):
         self.stack.remove_css_class("notification")

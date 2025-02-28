@@ -59,7 +59,7 @@ def on_activate(app):
     LayerShell.set_anchor(window, LayerShell.Edge.RIGHT, True)
     notch = Notch()
     window.set_child(notch)
-    bar_height = 50
+    bar_height = 45
 
     # Set fixed exclusive zone for the bar only
     LayerShell.set_exclusive_zone(window, bar_height)
@@ -91,4 +91,8 @@ def on_activate(app):
 
 app = Gtk.Application(application_id='com.example.gtk4.bar')
 app.connect('activate', on_activate)
-app.run(None)
+
+try:
+    app.run(None)
+except KeyboardInterrupt:
+    print("Application interrupted by user, exiting...")
