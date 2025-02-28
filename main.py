@@ -17,6 +17,7 @@ from gi.repository import Gtk, GLib, Gdk, Gio
 from gi.repository import Gtk4LayerShell as LayerShell
 import datetime
 from modules.notch import Notch
+from modules.bar import WorkspaceBar
 
 def load_css():
     css_provider = Gtk.CssProvider()
@@ -33,61 +34,87 @@ def load_css():
     return css_provider
 
 
-def reload_css(css_provider, window, css_path):
+def reload_css(css_provider, windows, css_path):
     if not css_provider:
         return
     try:
         css_provider.load_from_path(css_path)
         print("CSS reloaded")
+        
+        # Apply to all windows
+        display = Gdk.Display.get_default()
+        Gtk.StyleContext.remove_provider_for_display(display, css_provider)
+        Gtk.StyleContext.add_provider_for_display(
+            display, css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+        
     except GLib.Error as e:
         print(f"Error reloading CSS: {e}")
-        return
-    Gtk.StyleContext.add_provider_for_display(
-        window.get_display(), css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-    )
 
 def on_activate(app):
-    window = Gtk.Window(application=app, name="notch")
-    window.set_resizable(False)
-    window.set_decorated(False)  # Remove window decorations
+    # Create notch window (overlay)
+    notch_window = Gtk.Window(application=app, name="notch")
+    notch_window.set_resizable(False)
+    notch_window.set_decorated(False)
+    
+    # Initialize LayerShell for notch
+    LayerShell.init_for_window(notch_window)
+    LayerShell.set_layer(notch_window, LayerShell.Layer.TOP)  # Use overlay layer
+    LayerShell.set_anchor(notch_window, LayerShell.Edge.TOP, True)  # Anchor only to top edge
+    
+    # Position the notch in the center horizontally
+    LayerShell.set_anchor(notch_window, LayerShell.Edge.LEFT, False)
+    LayerShell.set_anchor(notch_window, LayerShell.Edge.RIGHT, False)
+    LayerShell.set_margin(notch_window, LayerShell.Edge.LEFT, 0)
+    LayerShell.set_margin(notch_window, LayerShell.Edge.RIGHT, 0)
+    LayerShell.set_margin(notch_window, LayerShell.Edge.TOP, -40)  # Adjusted for smaller bar height
 
-    # Initialize LayerShell for Wayland compositor compatibility
-    LayerShell.init_for_window(window)
-    LayerShell.set_layer(window, LayerShell.Layer.TOP)  # Place it at the top layer
-    LayerShell.set_anchor(window, LayerShell.Edge.TOP, True)  # Anchor to top edge
-    LayerShell.set_anchor(window, LayerShell.Edge.LEFT, True)  # Span full width
-    LayerShell.set_anchor(window, LayerShell.Edge.RIGHT, True)
+    # Create a box for the notch
+    center_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+    center_box.set_name("center-box")
+    center_box.set_halign(Gtk.Align.CENTER)
+    
+    # Add notch to center box
     notch = Notch()
-    window.set_child(notch)
-    bar_height = 45
-
-    # Set fixed exclusive zone for the bar only
-    LayerShell.set_exclusive_zone(window, bar_height)
-
-    # Get screen width from the first monitor
+    center_box.append(notch)
+    
+    # Set the box as notch window's child
+    notch_window.set_child(center_box)
+    
+    # Set notch size - only specifying height, letting width adjust to content
+    bar_height = 30  # Reduced from 45px to 30px
+    notch_window.set_size_request(-1, bar_height)  # Auto width, fixed height
+    
+    # The next step is to center the window on screen
     display = Gdk.Display.get_default()
-    monitors = display.get_monitors()  # Returns a GList of monitors
-    if monitors:
-        monitor = monitors[0]  # Use the first monitor
-        screen_width = monitor.get_geometry().width
-    else:
-        screen_width = 1920  # Fallback width
-        print("Warning: No monitors detected, using fallback width of 1920")
-
-    window.set_size_request(screen_width, bar_height)
-
-
-
+    if display:
+        monitor = display.get_monitors()[0] if display.get_monitors() else None
+        if monitor:
+            screen_width = monitor.get_geometry().width
+            # Calculate the position to center the window
+            # This is handled by LayerShell automatically when we don't anchor to left/right
+            pass
+    
+    # Create workspace bar (separate window)
+    workspace_bar = WorkspaceBar(app)
+    
+    # Load CSS for styling
     css_provider = load_css()
-    if not css_provider:
-        return
-
-    css_file = Gio.File.new_for_path('main.css')
-    monitor = css_file.monitor_file(Gio.FileMonitorFlags.NONE, None)
-    monitor.connect("changed", lambda *args: reload_css(css_provider, window, 'main.css'))
-    window.css_monitor = monitor
-
-    window.present()
+    
+    # Apply CSS to workspace bar
+    workspace_bar.load_css(css_provider)
+    
+    # Monitor CSS file for changes
+    if css_provider:
+        css_file = Gio.File.new_for_path('main.css')
+        monitor = css_file.monitor_file(Gio.FileMonitorFlags.NONE, None)
+        windows = [notch_window, workspace_bar]
+        monitor.connect("changed", lambda *args: reload_css(css_provider, windows, 'main.css'))
+        notch_window.css_monitor = monitor  # Keep a reference to prevent garbage collection
+    
+    # Show both windows
+    notch_window.present()
+    workspace_bar.present()
 
 app = Gtk.Application(application_id='com.example.gtk4.bar')
 app.connect('activate', on_activate)

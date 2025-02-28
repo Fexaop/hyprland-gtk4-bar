@@ -4,7 +4,7 @@
 
 #notch-box {
   margin: 10px;
-  margin-top: 0px;
+  margin-top: 10px;
   transition: all 0.5s cubic-bezier(0.5, 0.25, 0, 1);
 }
 
@@ -92,4 +92,28 @@
 
 #notification-close-button:hover {
   background-color: rgba(80, 80, 80, 0.7);
+}
+
+/* Workspace button styling */
+.workspace-button {
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 0.7rem;
+
+    background: transparent;
+    color: gray;  /* Default color for empty workspaces */
+}
+
+.workspace-button.active {
+    color: black;
+    background-color: white;
+}
+
+.workspace-button.has-windows {
+    color: white;
+}
+
+/* Ensure active workspace always has black text, even with windows */
+.workspace-button.active.has-windows {
+    color: black;
 }
