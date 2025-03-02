@@ -1,209 +1,332 @@
+#!/usr/bin/env python3
+
+from ctypes import CDLL
 import gi
+
+# Load GTK4 Layer Shell
+try:
+    CDLL('libgtk4-layer-shell.so')
+except OSError:
+    print("Error: Could not load libgtk4-layer-shell.so. Please ensure gtk4-layer-shell is installed.")
+    exit(1)
+
 gi.require_version('Gtk', '4.0')
-from gi.repository import Gtk, GLib
+gi.require_version('Gtk4LayerShell', '1.0')
+gi.require_version('AstalTray', '0.1')
+from gi.repository import Gtk, Gio, GObject, Gdk
+from gi.repository import Gtk4LayerShell as LayerShell
+from gi.repository import AstalTray as Tray
 
-from service.hyprland import HyprlandService
+# Define SYNC constant
+SYNC = GObject.BindingFlags.SYNC_CREATE
 
- # Create a simple GTK application to test the service
-class HyprlandTestApp(Gtk.Application):
-    def __init__(self):
-        super().__init__(application_id="com.example.hyprlandtest")
-        self.connect("activate", self.on_activate)
+# Add CSS provider for styling the menu with dark theme
+def setup_css():
+    css_provider = Gtk.CssProvider()
+    css_str = """
+    window {
+        background-color: #000000;
+    }
+    
+    .SysTray {
+        background-color: #000000;
+        padding: 0;
+    }
+    
+    .SysTray button {
+        background: none;
+        border: none;
+        padding: 0px;
+        margin: 0;
+        min-height: 22px;
+        min-width: 22px;
+    }
+    
+    .SysTray button:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+    
+    /* Target specific elements in popovers that might add padding */
+    popover {
+        color: #ffffff;
+        padding: 0;
+        margin: 0;
+        min-height: 0;
+        min-width: 0;
+        border: none;
+    }
+    
+    popover contents {
+        padding: 0;
+        margin: 0;
+        min-height: 0;
+        border: none;
+    }
+    
+    popover box {
+        padding: 0;
+        margin: 0;
+        min-height: 0;
+    }
+    
+    popover menu {
+        padding: 0;
+        margin: 0;
+        min-height: 0;
+        border: none;
+    }
+    
+    popover menuitem {
+        padding: 4px 8px;
+        margin: 0;
+        min-height: 0;
+    }
+    
+    /* Hide arrow */
+    popover arrow {
+        background-color: black;
+    }
+    
+    /* Extra specificity for the dark menu class */
+    .dark-menu, .dark-menu * {
+        padding: 0;
+        margin: 0;
+        min-height: 0;
+        border: none;
+    }
+    
+    /* Target GTK's internal menu structure */
+    .dark-menu contents {
+        padding: 0px;
+        background-color: #000000;
+        margin: 0;
+        color: #ffffff;
+        border-radius: 16px;
+    }
+    .dark-menu box {
+        padding: 4px;
+    }
+    """
+    
+    css_provider.load_from_string(css_str)
+    Gtk.StyleContext.add_provider_for_display(
+        Gdk.Display.get_default(),
+        css_provider,
+        Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+    )
+    return css_provider
+
+class SysTray(Gtk.Box):
+    def __init__(self) -> None:
+        super().__init__(spacing=0)  # No spacing between icons
+        self.set_css_classes(["SysTray"])
+        self.items = {}
+        self.current_popover = None
         
-    def on_activate(self, app):
-        window = Gtk.ApplicationWindow(application=app, title="Hyprland Service Test")
-        window.set_default_size(600, 400)
+        # Make the tray focusable
+        self.set_can_focus(True)
         
-        # Create a box for layout
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        box.set_margin_start(10)
-        box.set_margin_end(10)
-        box.set_margin_top(10)
-        box.set_margin_bottom(10)
+        # Add key controller to the tray
+        key_controller = Gtk.EventControllerKey.new()
+        self.add_controller(key_controller)
         
-        # Get the hyprland service
-        self.hyprland = HyprlandService.get_default()
+        def on_key_pressed(controller, keyval, keycode, state):
+            if keyval == Gdk.KEY_Escape and self.current_popover:
+                self.current_popover.popdown()
+                return True
+            return False
         
-        # Add labels to display info
-        self.layout_label = Gtk.Label(label=f"Keyboard Layout: {self.hyprland.get_kb_layout()}")
-        box.append(self.layout_label)
+        key_controller.connect("key-pressed", on_key_pressed)
         
-        self.workspace_label = Gtk.Label(label="Active Workspace: Loading...")
-        box.append(self.workspace_label)
+        tray = Tray.get_default()
+        tray.connect("item_added", self.add_item)
+        tray.connect("item_removed", self.remove_item)
+
+    def add_item(self, _: Tray.Tray, id: str):
+        if id in self.items:
+            return
+
+        item = Tray.get_default().get_item(id)
         
-        self.window_label = Gtk.Label(label="Active Window: Loading...")
-        box.append(self.window_label)
+        btn = Gtk.Button()
+        btn.set_visible(True)
+        btn.set_has_frame(False)
+        btn.set_can_focus(True)
         
-        # Create a list box to display all workspaces
-        workspaces_frame = Gtk.Frame(label="Workspaces")
-        workspaces_scroll = Gtk.ScrolledWindow()
-        workspaces_scroll.set_vexpand(True)
-        workspaces_scroll.set_min_content_height(150)
+        icon = Gtk.Image()
+        icon.set_visible(True)
+        icon.set_size_request(22, 22)
+
+        item.bind_property("tooltip-markup", btn, "tooltip-markup", SYNC)
+        item.bind_property("gicon", icon, "gicon", SYNC)
         
-        self.workspaces_list = Gtk.ListBox()
-        self.workspaces_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
-        self.workspaces_list.connect("row-activated", self.on_workspace_selected)
+        btn.menu_model = None
         
-        workspaces_scroll.set_child(self.workspaces_list)
-        workspaces_frame.set_child(workspaces_scroll)
-        box.append(workspaces_frame)
+        def on_menu_model_changed(*args):
+            btn.menu_model = item.get_property("menu-model")
+            
+        item.connect("notify::menu-model", on_menu_model_changed)
+        btn.menu_model = item.get_property("menu-model")
         
-        # Buttons for actions
-        buttons_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
-        buttons_box.set_homogeneous(True)
+        btn.insert_action_group("dbusmenu", item.get_action_group())
         
-        switch_button = Gtk.Button(label="Switch Keyboard Layout")
-        switch_button.connect("clicked", self.on_switch_clicked)
-        buttons_box.append(switch_button)
+        def on_action_group(*args):
+            btn.insert_action_group("dbusmenu", item.get_action_group())
+
+        item.connect("notify::action-group", on_action_group)
         
-        sync_windows_button = Gtk.Button(label="Sync Active Window")
-        sync_windows_button.connect("clicked", self.on_sync_window_clicked)
-        buttons_box.append(sync_windows_button)
+        click_gesture = Gtk.GestureClick.new()
+        click_gesture.set_button(3)
         
-        sync_workspaces_button = Gtk.Button(label="Sync Workspaces")
-        sync_workspaces_button.connect("clicked", self.on_sync_workspaces_clicked)
-        buttons_box.append(sync_workspaces_button)
+        def on_right_click(gesture, n_press, x, y):
+            if btn.menu_model:
+                if self.current_popover and self.current_popover != None:
+                    self.current_popover.popdown()
+                    self.current_popover = None
+
+                popover = Gtk.PopoverMenu.new_from_model(btn.menu_model)
+                popover.set_parent(btn)
+                popover.set_css_classes(["dark-menu","pop-box"])
+                popover.set_offset(0, 5)
+                popover.set_position(Gtk.PositionType.BOTTOM)
+                popover.set_autohide(True)
+                popover.set_has_arrow(False)
+                popover.set_can_focus(True)
+                
+                # Ensure we have no padding from the popover itself
+                popover.set_size_request(0, 0)
+                popover.set_vexpand(False)
+                popover.set_valign(Gtk.Align.START)
+                
+                # Apply more adjustments when content is available
+                def modify_popover_content():
+                    content = popover.get_child()
+                    if content:
+                        # Remove any padding/borders from content elements
+                        content.set_margin_start(0)
+                        content.set_margin_end(0)
+                        content.set_margin_top(0)
+                        content.set_margin_bottom(0)
+                        content.set_css_classes(["dark-menu"])
+                        
+                        # Try to find subchildren that might have padding
+                        if isinstance(content, Gtk.Box):
+                            for child in content:
+                                child.set_margin_start(0)
+                                child.set_margin_end(0)
+                                child.set_margin_top(0)
+                                child.set_margin_bottom(0)
+                
+                # Add hook to modify content after popover is created
+                GObject.timeout_add(10, modify_popover_content)
+                
+                # Add key controller to the popover
+                popover_key_controller = Gtk.EventControllerKey.new()
+                popover.add_controller(popover_key_controller)
+                
+                def on_popover_key_pressed(controller, keyval, keycode, state):
+                    if keyval == Gdk.KEY_Escape:
+                        popover.popdown()
+                        return True
+                    return False
+                
+                popover_key_controller.connect("key-pressed", on_popover_key_pressed)
+                
+                # Show the popover
+                popover.popup()
+                self.current_popover = popover
+                
+                # Improved sizing approach
+                def on_map(widget):
+                    # Wait for content to be fully realized
+                    GObject.timeout_add(50, adjust_popover_size)
+                
+                def adjust_popover_size():
+                    content = popover.get_child()
+                    if content:
+                        # Get all menu items and calculate total height
+                        # Try to count actual menu items
+                        menu_item_count = 0
+                        if hasattr(btn.menu_model, 'get_n_items'):
+                            menu_item_count = btn.menu_model.get_n_items()
+                        
+                        # If we have menu items, calculate a height based on reasonable estimates
+                        if menu_item_count > 0:
+                            # Each menu item is approximately 24px high (adjust if needed)
+                            item_height = 24
+                            total_height = menu_item_count * item_height
+                            popover.set_size_request(-1, total_height)
+                        else:
+                            # Fallback to measuring content
+                            min_size, nat_size = content.measure(Gtk.Orientation.VERTICAL, -1)
+                            if nat_size > 0:
+                                popover.set_size_request(-1, nat_size)
+                        
+                        # Apply zero margins again after sizing
+                        modify_popover_content()
+                    return False  # Don't call again
+                
+                popover.connect("map", on_map)
+                popover.present()
+                popover.grab_focus()
+                
+                def on_popup_closed(*args):
+                    if self.current_popover == popover:
+                        self.current_popover = None
+                    popover.popdown()
+                
+                popover.connect("closed", on_popup_closed)
+                
+        click_gesture.connect("pressed", on_right_click)
+        btn.add_controller(click_gesture)
+
+        btn.set_child(icon)
+        self.append(btn)
+        self.items[id] = btn
+
+    def remove_item(self, _: Tray.Tray, id: str):
+        if id in self.items:
+            btn = self.items[id]
+            self.remove(btn)
+            del self.items[id]
+
+def main():
+    app = Gtk.Application(application_id="com.example.SystemTray")
+    
+    def on_activate(app):
+        css_provider = setup_css()
         
-        # Add toggle button for auto-sync
-        auto_sync_button = Gtk.ToggleButton(label="Auto Sync")
-        auto_sync_button.set_active(True)
-        auto_sync_button.connect("toggled", self.on_auto_sync_toggled)
-        buttons_box.append(auto_sync_button)
+        window = Gtk.Window(application=app)
+        window.set_title("System Tray Example")
+        window.set_can_focus(True)
         
-        box.append(buttons_box)
+        LayerShell.init_for_window(window)
+        LayerShell.set_layer(window, LayerShell.Layer.TOP)
+        LayerShell.set_keyboard_mode(window, LayerShell.KeyboardMode.ON_DEMAND)
         
-        # Connect signals to update the UI
-        self.hyprland.connect("notify::kb-layout", self.on_layout_changed)
-        self.hyprland.connect("notify::active-workspace", self.on_workspace_changed)
-        self.hyprland.connect("notify::active-window", self.on_window_changed)
+        LayerShell.set_anchor(window, LayerShell.Edge.TOP, True)
+        LayerShell.set_anchor(window, LayerShell.Edge.RIGHT, True)
+        LayerShell.set_anchor(window, LayerShell.Edge.LEFT, False)
+        LayerShell.set_anchor(window, LayerShell.Edge.BOTTOM, False)
         
-        # Connect to both signals for workspace updates
-        self.hyprland.connect("workspaces-changed", self.update_workspaces_list)
-        self.hyprland.connect("active-workspace-changed", self.update_workspaces_list)
+        LayerShell.set_margin(window, LayerShell.Edge.TOP, 0)
+        LayerShell.set_margin(window, LayerShell.Edge.RIGHT, 0)
+        LayerShell.set_exclusive_zone(window, 30)
         
-        # Update labels with current info
-        self.update_workspace_label()
-        self.update_window_label()
-        self.update_workspaces_list()
+        systray = SysTray()
+        systray.set_size_request(-1, 30)
         
-        # Handle application shutdown
-        window.connect("close-request", self.on_window_close)
+        systray.set_margin_start(4)
+        systray.set_margin_end(4)
+        systray.set_margin_top(4)
+        systray.set_margin_bottom(4)
         
-        window.set_child(box)
+        window.set_child(systray)
         window.present()
+        window.grab_focus()
     
-    def on_layout_changed(self, obj, pspec):
-        self.layout_label.set_label(f"Keyboard Layout: {self.hyprland.get_kb_layout()}")
-    
-    def on_workspace_changed(self, obj, pspec):
-        self.update_workspace_label()
-        # Highlight the active workspace in the list
-        self.update_workspaces_list()
-    
-    def on_window_changed(self, obj, pspec):
-        self.update_window_label()
-    
-    def update_workspace_label(self):
-        workspace = self.hyprland.get_active_workspace()
-        if workspace:
-            name = workspace.get("name", "Unknown")
-            self.workspace_label.set_label(f"Active Workspace: {name}")
-    
-    def update_window_label(self):
-        window = self.hyprland.get_active_window()
-        if window:
-            title = window.get("title", "Unknown")
-            window_class = window.get("class", "Unknown")
-            self.window_label.set_label(f"Active Window: {title} ({window_class})")
-        else:
-            self.window_label.set_label("Active Window: None")
-    
-    def update_workspaces_list(self, *args):
-        """Update the list of workspaces in the UI"""
-        print("Updating workspaces list...")  # Debug print
-        
-        # Clear the list
-        while True:
-            row = self.workspaces_list.get_row_at_index(0)
-            if row is None:
-                break
-            self.workspaces_list.remove(row)
-        
-        # Get all workspaces
-        workspaces = self.hyprland.get_workspaces()
-        print(f"Current workspaces: {[{'id': ws.get('id'), 'windows': ws.get('windows')} for ws in workspaces]}")  # More compact debug
-        
-        active_ws = self.hyprland.get_active_workspace()
-        active_id = active_ws.get("id") if active_ws else None
-        
-        # Add each workspace to the list
-        for ws in workspaces:
-            ws_id = ws.get("id")
-            name = ws.get("name", "Unknown")
-            monitor = ws.get("monitor", "Unknown")
-            windows = ws.get("windows", 0)
-            
-            # Create a row for the workspace
-            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
-            box.set_margin_start(5)
-            box.set_margin_end(5)
-            box.set_margin_top(5)
-            box.set_margin_bottom(5)
-            
-            # Indicate active workspace with an arrow
-            if ws_id == active_id:
-                active_indicator = Gtk.Label(label="➤")
-                box.append(active_indicator)
-            
-            # Add window count indicator with color based on count
-            window_count = Gtk.Label(label=f"[{windows}]")
-            if windows > 0:
-                window_count.add_css_class("warning")  # Add CSS class for styling
-            box.append(window_count)
-            
-            # Add main workspace information
-            label = Gtk.Label(label=f"ID: {ws_id} | Name: {name} | Monitor: {monitor}")
-            label.set_halign(Gtk.Align.START)
-            box.append(label)
-            
-            # Store workspace ID as a Python attribute instead of using set_data
-            row = Gtk.ListBoxRow()
-            row.set_child(box)
-            row.workspace_id = ws_id  # Use Python attribute instead of set_data
-            
-            self.workspaces_list.append(row)
-    
-    def on_workspace_selected(self, list_box, row):
-        # Use the Python attribute instead of get_data
-        ws_id = getattr(row, 'workspace_id', None)
-        if ws_id is not None:
-            self.hyprland.switch_to_workspace(ws_id)
-    
-    def on_switch_clicked(self, button):
-        self.hyprland.switch_kb_layout()
-    
-    def on_sync_window_clicked(self, button):
-        # Call the private method using name mangling syntax
-        self.hyprland._sync_active_window()
-    
-    def on_sync_workspaces_clicked(self, button):
-        # Call the private method using name mangling syntax
-        self.hyprland._sync_workspaces()
-    
-    def on_auto_sync_toggled(self, button):
-        """Toggle auto-sync feature."""
-        is_active = button.get_active()
-        self.hyprland.enable_auto_sync(is_active)
-        if is_active:
-            print("Auto sync enabled")
-        else:
-            print("Auto sync disabled")
-    
-    def on_window_close(self, window):
-        """Clean up resources when window is closed."""
-        hyprland = HyprlandService.get_default()
-        hyprland.cleanup()
+    app.connect('activate', on_activate)
+    app.run(None)
 
-# Run the application
-app = HyprlandTestApp()
-app.run(None)
+if __name__ == "__main__":
+    main()

@@ -59,15 +59,21 @@ def on_activate(app):
     
     # Initialize LayerShell for notch
     LayerShell.init_for_window(notch_window)
-    LayerShell.set_layer(notch_window, LayerShell.Layer.TOP)  # Use overlay layer
+    LayerShell.set_layer(notch_window, LayerShell.Layer.TOP)  # Changed back to TOP layer
     LayerShell.set_anchor(notch_window, LayerShell.Edge.TOP, True)  # Anchor only to top edge
+    
+    # Ensure the notch window receives keyboard/mouse input
+    LayerShell.set_keyboard_mode(notch_window, LayerShell.KeyboardMode.ON_DEMAND)
+    
+    # Increase the z-index of the notch to ensure it's above everything else
+    LayerShell.set_namespace(notch_window, "notch")  # Use a custom namespace for higher precedence
     
     # Position the notch in the center horizontally
     LayerShell.set_anchor(notch_window, LayerShell.Edge.LEFT, False)
     LayerShell.set_anchor(notch_window, LayerShell.Edge.RIGHT, False)
     LayerShell.set_margin(notch_window, LayerShell.Edge.LEFT, 0)
     LayerShell.set_margin(notch_window, LayerShell.Edge.RIGHT, 0)
-    LayerShell.set_margin(notch_window, LayerShell.Edge.TOP, -40)  # Adjusted for smaller bar height
+    LayerShell.set_margin(notch_window, LayerShell.Edge.TOP, -50)  # Reduced negative margin
 
     # Create a box for the notch
     center_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
@@ -82,7 +88,7 @@ def on_activate(app):
     notch_window.set_child(center_box)
     
     # Set notch size - only specifying height, letting width adjust to content
-    bar_height = 30  # Reduced from 45px to 30px
+    bar_height = 40  # Reduced from 45px to 30px
     notch_window.set_size_request(-1, bar_height)  # Auto width, fixed height
     
     # The next step is to center the window on screen

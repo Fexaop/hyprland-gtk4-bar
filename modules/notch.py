@@ -23,6 +23,9 @@ class Notch(Gtk.Box):
         self.set_halign(Gtk.Align.CENTER)
         self.set_valign(Gtk.Align.CENTER)  # Always at top
         
+        # Make sure the box receives events
+        self.set_can_target(True)
+        
         # Track the original size
         self.normal_height = 30  # Default height for the notch
         # Pass self to Dashboard so it can access the stack later.
@@ -78,6 +81,11 @@ class Notch(Gtk.Box):
         self.right_corner.get_style_context().add_class("corner")
         self.append(self.right_corner)
         
+        # Make the entire notch clickable
+        self_gesture = Gtk.GestureClick()
+        self_gesture.connect("pressed", self.on_active_event_box_click)
+        self.add_controller(self_gesture)
+        
         # Create a click event for the active event box
         gesture = Gtk.GestureClick()
         gesture.connect("pressed", self.on_active_event_box_click)
@@ -128,6 +136,7 @@ class Notch(Gtk.Box):
         
     def on_active_event_box_click(self, gesture, n_press, x, y):
         """Handle click on the active event box to show dashboard"""
+        print("Notch clicked, showing dashboard")  # Debug message
         self.open_notch('dashboard')
         return True
     

@@ -129,7 +129,6 @@ class HyprlandService(GObject.Object):
                         try:
                             data = sock.recv(4096).decode('utf-8')
                             if not data:
-                                print("Socket connection closed, will retry...")
                                 break
                             
                             # Append to buffer and process complete lines
@@ -160,8 +159,9 @@ class HyprlandService(GObject.Object):
     def _on_event_received(self, event: str) -> None:
         """Handle received events from Hyprland."""
         event = event.strip()
-        print(f"Received Hyprland event: {event}")  # Debug print to see events
         
+        # Extract event type and data
+        event_parts = event.split(">>")
         # Extract event type and data
         event_parts = event.split(">>")
         event_type = event_parts[0] if event_parts else ""
@@ -236,7 +236,6 @@ class HyprlandService(GObject.Object):
             self._active_window = json.loads(self.send_command("j/activewindow"))
             self._last_window_address = self._active_window.get("address")
             self.props.active_window = self._active_window
-            print(f"Active window synced: {self._active_window.get('title', 'None')}")
             self.emit("active-window-changed")
         except Exception as e:
             print(f"Error syncing active window: {e}")

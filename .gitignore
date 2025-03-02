@@ -2,3 +2,4 @@ __pycache__/
 service/__pycache__
 modules/__pycache__
 widgets/__pycache__
+.aider*

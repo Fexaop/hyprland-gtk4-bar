@@ -11,8 +11,10 @@
 #notch-content {
   background-color: black;
   min-height: 40px;
+  margin-right: -4px;
+  margin-left: -4px;
   min-width: 256px;
-  border-radius: 0 0 20px 20px;
+  border-radius: 0 0 16px 16px;
   transition: all 0.5s cubic-bezier(0.5, 0.25, 0, 1.25);
 }
 
@@ -116,4 +118,30 @@
 /* Ensure active workspace always has black text, even with windows */
 .workspace-button.active.has-windows {
     color: black;
+}
+#workspace-bar{
+  background-color: transparent;
+}
+
+/* System Tray Styling */
+.system-tray {
+    background-color: rgba(0, 0, 0, 0.8);
+    border-radius: 12px;
+    padding: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.84);
+}
+
+.tray-icon {
+    padding: 2px;
+    border-radius: 6px;
+    transition: all 0.2s ease-in-out;
+}
+
+.tray-icon:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.tray-icon:active {
+    background-color: rgba(255, 255, 255, 0.2);
 }

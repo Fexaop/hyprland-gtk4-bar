@@ -198,6 +198,7 @@ class WorkspacePanel(Gtk.Box):
         
         self.set_name("workspace-panel")
         self.add_css_class("panel")
+        self.set_valign(Gtk.Align.CENTER)  # Center this panel vertically
         
         # Create frame for the workspace indicator
         frame = Gtk.Frame()
@@ -205,9 +206,11 @@ class WorkspacePanel(Gtk.Box):
         frame.set_margin_end(2)
         frame.set_margin_top(2)
         frame.set_margin_bottom(2)
+        frame.set_valign(Gtk.Align.CENTER)  # Center frame vertically
         
         # Add workspace indicator to frame
         self.workspace_indicator = WorkspaceIndicator()
+        self.workspace_indicator.set_valign(Gtk.Align.CENTER)  # Center indicator vertically
         frame.set_child(self.workspace_indicator)
         
         # Add frame to this container
