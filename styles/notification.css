@@ -1,0 +1,55 @@
+#notification-box {
+  opacity: 1;
+  margin: -800px;
+  transition: all 0.45s cubic-bezier(0.5, 0.25, 0, 1);
+  padding: 10px;
+  border-radius: 8px;
+}
+
+#notification-box.open {
+  opacity: 1;
+  margin: 10px;
+}
+
+#notification-view {
+  opacity: 1;
+  padding: 8px 12px;
+}
+
+#notification-app-icon {
+  margin-bottom: 8px;
+}
+
+#notification-left-side {
+  margin-right: 8px;
+}
+
+#notification-image {
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.notification-title {
+  font-weight: bold;
+  font-size: 14px;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.notification-body {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Close button styling */
+#notification-close-button {
+  padding: 4px 12px;
+  font-size: 11px;
+  border-radius: 4px;
+  background-color: rgba(60, 60, 60, 0.5);
+  color: white;
+}
+
+#notification-close-button:hover {
+  background-color: rgba(80, 80, 80, 0.7);
+}

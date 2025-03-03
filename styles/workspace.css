@@ -1,0 +1,60 @@
+/* Workspace button styling */
+.workspace-button {
+    border-radius: 3px;
+    font-weight: bold;
+    font-size: 10px;
+    padding: 0px;  /* Remove button padding */
+    margin: 0px;   /* Remove button margins */
+    background: transparent;
+    color: gray;
+    min-width: 0;        /* Allow button to shrink */
+    min-height: 0;
+}
+
+
+.workspace-button.has-windows {
+    color: white;
+}
+
+/* Button directly under gradient should have black text */
+.workspace-button.under-gradient {
+    color: black;
+}
+
+
+
+/* When button has windows but is under gradient, text should be black */
+.workspace-button.has-windows.under-gradient {
+    color: black;
+}
+
+#bar {
+  background-color: transparent;
+}
+
+/* Panel styling */
+.panel {
+    background-color: transparent;
+    border-radius: 4px;
+    padding: 2px;
+}
+
+/* Style for the workspace frame - now just a container */
+#workspace-frame {
+    padding: 5px;
+    background-color: black;
+}
+
+/* Style for the inner box with gradient */
+#workspace-inner-box {
+    --box-position: 17%; /* Initial position value - will be updated dynamically */
+    --gradient-half-width: 10px; /* Default gradient half width */
+    background: linear-gradient(to right, 
+                black calc(var(--box-position) - var(--gradient-half-width)), 
+                white calc(var(--box-position) - var(--gradient-half-width)), 
+                white calc(var(--box-position) + var(--gradient-half-width)), 
+                black calc(var(--box-position) + var(--gradient-half-width)));
+    padding: 2px;
+    border-radius: 3px;
+    spacing: 0px;  /* No spacing between buttons */
+}

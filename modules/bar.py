@@ -13,17 +13,17 @@ gi.require_version('Gtk4LayerShell', '1.0')
 from gi.repository import Gtk, GLib, Gdk
 from gi.repository import Gtk4LayerShell as LayerShell
 
-from modules.workspace import WorkspacePanel
+from modules.workspace import WorkspaceBar
 from modules.systray import SysTray, setup_css
 
-class WorkspaceBar(Gtk.ApplicationWindow):
-    """A LayerShell window that contains the workspace panel."""
+class Bar(Gtk.ApplicationWindow):
+    """A LayerShell window that contains the workspace bar."""
     
     def __init__(self, application):
         super().__init__(application=application)
         
         # Set up the window
-        self.set_name("workspace-bar")
+        self.set_name("bar")
         self.set_resizable(True)  # Allow resizing
         self.set_decorated(False)
         
@@ -56,20 +56,19 @@ class WorkspaceBar(Gtk.ApplicationWindow):
         
         # Create main box
         main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        main_box.set_name("workspace-bar-box")
+        main_box.set_name("bar-box")
         main_box.set_valign(Gtk.Align.CENTER)  # Center content vertically
         main_box.set_vexpand(True)  # Allow box to expand vertically
         main_box.set_hexpand(True)  # Allow box to expand horizontally
-        main_box.set_margin_top(5)  # 5px margin at the top
         main_box.set_margin_bottom(5)  # 5px margin at the bottom
         
-        # Add workspace panel (left-aligned)
-        workspace_panel = WorkspacePanel()
-        workspace_panel.set_valign(Gtk.Align.CENTER)  # Center workspace panel vertically
-        workspace_panel.set_vexpand(True)  # Allow panel to expand vertically
-        main_box.append(workspace_panel)
+        # Add workspace bar (left-aligned)
+        workspace_bar = WorkspaceBar()
+        workspace_bar.set_valign(Gtk.Align.CENTER)  # Center workspace bar vertically
+        workspace_bar.set_vexpand(True)  # Allow bar to expand vertically
+        main_box.append(workspace_bar)
         
-        # Add an empty expanding spacer to push workspace panel to left and system tray to right
+        # Add an empty expanding spacer to push workspace bar to left and system tray to right
         spacer = Gtk.Box()
         spacer.set_hexpand(True)
         spacer.set_valign(Gtk.Align.CENTER)  # Center spacer vertically
@@ -101,10 +100,10 @@ class WorkspaceBar(Gtk.ApplicationWindow):
 
 # For testing individually
 if __name__ == "__main__":
-    app = Gtk.Application(application_id="com.example.workspace_bar")
+    app = Gtk.Application(application_id="com.example.bar")
     
     def on_activate(app):
-        bar = WorkspaceBar(app)
+        bar = Bar(app)
         bar.present()
     
     app.connect("activate", on_activate)

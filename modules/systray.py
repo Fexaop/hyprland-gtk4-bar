@@ -20,92 +20,7 @@ SYNC = GObject.BindingFlags.SYNC_CREATE
 # Add CSS provider for styling
 def setup_css():
     css_provider = Gtk.CssProvider()
-    css_str = """
-    window {
-        background-color: #000000;
-    }
-    
-    .SysTray {
-        background-color: #000000;
-        padding: 0;
-    }
-    
-    .SysTray button {
-        background: none;
-        border: none;
-        padding: 0px;
-        margin: 0;
-        min-height: 22px;
-        min-width: 22px;
-    }
-    
-    .SysTray button:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-    }
-    
-    /* Target specific elements in popovers that might add padding */
-    popover {
-        color: #ffffff;
-        padding: 0;
-        margin: 0;
-        min-height: 0;
-        min-width: 0;
-        border: none;
-    }
-    
-    popover contents {
-        padding: 0;
-        margin: 0;
-        min-height: 0;
-        border: none;
-    }
-    
-    popover box {
-        padding: 0;
-        margin: 0;
-        min-height: 0;
-    }
-    
-    popover menu {
-        padding: 0;
-        margin: 0;
-        min-height: 0;
-        border: none;
-    }
-    
-    popover menuitem {
-        padding: 4px 8px;
-        margin: 0;
-        min-height: 0;
-    }
-    
-    /* Hide arrow */
-    popover arrow {
-        background-color: black;
-    }
-    
-    /* Extra specificity for the dark menu class */
-    .dark-menu, .dark-menu * {
-        padding: 0;
-        margin: 0;
-        min-height: 0;
-        border: none;
-    }
-    
-    /* Target GTK's internal menu structure */
-    .dark-menu contents {
-        padding: 0px;
-        background-color: #000000;
-        margin: 0;
-        color: #ffffff;
-        border-radius: 16px;
-    }
-    .dark-menu box {
-        padding: 4px;
-    }
-    """
-    
-    css_provider.load_from_string(css_str)
+    # CSS now defined in main.css file
     Gtk.StyleContext.add_provider_for_display(
         Gdk.Display.get_default(),
         css_provider,
@@ -115,7 +30,7 @@ def setup_css():
 
 class SysTray(Gtk.Box):
     def __init__(self) -> None:
-        super().__init__(spacing=0)  # No spacing between icons
+        super().__init__(spacing=5)  # No spacing between icons
         self.set_css_classes(["SysTray"])
         self.items = {}
         self.current_popover = None
@@ -173,6 +88,14 @@ class SysTray(Gtk.Box):
 
         item.connect("notify::action-group", on_action_group)
         
+        # Override button click handler instead of using a gesture
+        # This is more reliable for repeated clicks
+        btn.connect("clicked", lambda button: GLib.idle_add(self._activate_tray_item, item))
+        
+        # Store a reference to the item in the button for later use
+        btn.tray_item = item
+        
+        # Right-click gesture 
         click_gesture = Gtk.GestureClick.new()
         click_gesture.set_button(3)
         
@@ -312,3 +235,24 @@ class SysTray(Gtk.Box):
             btn = self.items[id]
             self.remove(btn)
             del self.items[id]
+    
+    def _activate_tray_item(self, item):
+        """Activate tray item with current pointer position."""
+        try:
+            # Get the current pointer position relative to screen
+            display = Gdk.Display.get_default()
+            seat = display.get_default_seat()
+            pointer = seat.get_pointer()
+            
+            # For Wayland compatibility, use 0,0 which lets the item
+            # determine proper coordinates internally
+            x, y = 0, 0
+            
+            # Activate using these coordinates
+            print(f"Activating tray item at ({x}, {y})")
+            item.activate(x, y)
+            
+        except Exception as e:
+            print(f"Error activating tray item: {e}")
+        
+        return False  # Don't call again

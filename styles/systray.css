@@ -1,0 +1,103 @@
+/* System Tray Styling */
+.system-tray {
+    background-color: rgba(0, 0, 0, 0.8);
+    border-radius: 12px;
+    padding: 4px;
+    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.84);
+}
+
+.tray-icon {
+    padding: 2px;
+    border-radius: 6px;
+    transition: all 0.2s ease-in-out;
+}
+
+.tray-icon:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.tray-icon:active {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.SysTray {
+    background-color: #000000;
+    padding: 5px;
+    border-radius: 12px;
+
+}
+
+.SysTray button {
+    background: none;
+    border: none;
+    padding: 0px;
+    margin: 0;
+    min-height: 22px;
+    min-width: 22px;
+}
+
+.SysTray button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Target specific elements in popovers that might add padding */
+popover {
+    color: #ffffff;
+    padding: 0;
+    margin: 0;
+    min-height: 0;
+    min-width: 0;
+    border: none;
+}
+
+popover contents {
+    padding: 0;
+    margin: 0;
+    min-height: 0;
+    border: none;
+}
+
+popover box {
+    padding: 0;
+    margin: 0;
+    min-height: 0;
+}
+
+popover menu {
+    padding: 0;
+    margin: 0;
+    min-height: 0;
+    border: none;
+}
+
+popover menuitem {
+    padding: 4px 8px;
+    margin: 0;
+    min-height: 0;
+}
+
+/* Hide arrow */
+popover arrow {
+    background-color: black;
+}
+
+/* Extra specificity for the dark menu class */
+.dark-menu, .dark-menu * {
+    padding: 0;
+    margin: 0;
+    min-height: 0;
+    border: none;
+}
+
+/* Target GTK's internal menu structure */
+.dark-menu contents {
+    padding: 0px;
+    background-color: #000000;
+    margin: 0;
+    color: #ffffff;
+    border-radius: 16px;
+}
+
+.dark-menu box {
+    padding: 4px;
+}

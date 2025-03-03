@@ -1,5 +1,6 @@
 from ctypes import CDLL
 import gi
+import os
 
 # Load GTK4 Layer Shell
 try:
@@ -17,15 +18,17 @@ from gi.repository import Gtk, GLib, Gdk, Gio
 from gi.repository import Gtk4LayerShell as LayerShell
 import datetime
 from modules.notch import Notch
-from modules.bar import WorkspaceBar
+from modules.bar import Bar
 
 def load_css():
     css_provider = Gtk.CssProvider()
     try:
         css_provider.load_from_path('main.css')
+        print("CSS loaded from main.css")
     except GLib.Error as e:
         print(f"Error loading CSS: {e}")
         return None
+    
     Gtk.StyleContext.add_provider_for_display(
         Gdk.Display.get_default(),
         css_provider,
@@ -39,7 +42,7 @@ def reload_css(css_provider, windows, css_path):
         return
     try:
         css_provider.load_from_path(css_path)
-        print("CSS reloaded")
+        print(f"CSS reloaded from {css_path}")
         
         # Apply to all windows
         display = Gdk.Display.get_default()
@@ -73,7 +76,7 @@ def on_activate(app):
     LayerShell.set_anchor(notch_window, LayerShell.Edge.RIGHT, False)
     LayerShell.set_margin(notch_window, LayerShell.Edge.LEFT, 0)
     LayerShell.set_margin(notch_window, LayerShell.Edge.RIGHT, 0)
-    LayerShell.set_margin(notch_window, LayerShell.Edge.TOP, -50)  # Reduced negative margin
+    LayerShell.set_margin(notch_window, LayerShell.Edge.TOP, -52)  # Reduced negative margin
 
     # Create a box for the notch
     center_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
@@ -102,25 +105,42 @@ def on_activate(app):
             pass
     
     # Create workspace bar (separate window)
-    workspace_bar = WorkspaceBar(app)
+    bar = Bar(app)
     
     # Load CSS for styling
     css_provider = load_css()
     
     # Apply CSS to workspace bar
-    workspace_bar.load_css(css_provider)
+    bar.load_css(css_provider)
     
-    # Monitor CSS file for changes
+    # Monitor all CSS files for changes
     if css_provider:
-        css_file = Gio.File.new_for_path('main.css')
-        monitor = css_file.monitor_file(Gio.FileMonitorFlags.NONE, None)
-        windows = [notch_window, workspace_bar]
-        monitor.connect("changed", lambda *args: reload_css(css_provider, windows, 'main.css'))
-        notch_window.css_monitor = monitor  # Keep a reference to prevent garbage collection
+        css_files = [
+            'main.css',
+            'styles/notch.css',
+            'styles/notification.css',
+            'styles/workspace.css',
+            'styles/systray.css'
+        ]
+        
+        # Create styles directory if it doesn't exist
+        os.makedirs('styles', exist_ok=True)
+        
+        windows = [notch_window, bar]
+        monitors = []
+        
+        for css_file_path in css_files:
+            css_file = Gio.File.new_for_path(css_file_path)
+            monitor = css_file.monitor_file(Gio.FileMonitorFlags.NONE, None)
+            monitor.connect("changed", lambda m, f, of, evt, fp=css_file_path: reload_css(css_provider, windows, 'main.css'))
+            monitors.append(monitor)  # Keep references to prevent garbage collection
+        
+        # Store monitors as an attribute of the window to prevent garbage collection
+        notch_window.css_monitors = monitors
     
     # Show both windows
     notch_window.present()
-    workspace_bar.present()
+    bar.present()
 
 app = Gtk.Application(application_id='com.example.gtk4.bar')
 app.connect('activate', on_activate)

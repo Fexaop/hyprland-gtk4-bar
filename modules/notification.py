@@ -133,6 +133,7 @@ class NotificationView(Gtk.Box):
         
     def on_close_clicked(self, button):
         """Handle close button click"""
+        print("Notification close button clicked")  # Debug print
         self.notification_center.hide_notification()
         return True
 
@@ -177,7 +178,7 @@ class NotificationCenter:
         self.prepare_notification(notification)
         
         # Show the notification in the notch
-        self.notch.show_notification()
+        self.notch.open_notch('notification')
         
         # Auto-hide after a delay
         GLib.timeout_add(8000, self.hide_notification)
@@ -185,6 +186,9 @@ class NotificationCenter:
     def hide_notification(self):
         """Hide the current notification"""
         if self.is_showing:
+            # Print the previous widget for debugging
+            print(f"Previous widget before closing notification: {self.notch.previous_widget}")
+            
             # Close the notification with proper reason if it exists
             if self.current_notification:
                 self.notifications.close_notification(
@@ -192,7 +196,9 @@ class NotificationCenter:
                     NotificationCloseReason.EXPIRED
                 )
             
-            self.notch.hide_notification()
+            # Use collapse_notch directly
+            self.notch.collapse_notch()
+            
             self.is_showing = False
             
             # Show the next notification if there are any
