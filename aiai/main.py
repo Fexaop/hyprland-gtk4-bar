@@ -93,7 +93,7 @@ async def deepresearch_endpoint(request: ChatRequest):
             # Generate a unique filename based on timestamp
             import time
             timestamp = int(time.time())
-            filename = f"Summary/{timestamp}.md"
+            filename = f"summary/{timestamp}.md"
             
             # Write the content to the file, preserving newlines
             with open(filename, "w", encoding="utf-8") as f:
