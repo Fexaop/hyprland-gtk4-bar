@@ -207,6 +207,9 @@ class LLMProcessor:
         4. Maintain factual accuracy
         5. Note any limitations or gaps in the information
         6. Do not mention phrases like "based on xyz" or anything like that, return only and only the highly detailed summary, failing to do so will be considered as an incorrect response.
+        7. Try to write the summary, not as a summary but a replacement for the entire page.
+        8. Try to include data alalysis, statistics, and any other relevant information.
+        9. The summary should, if applicable include tables, good formating, code blocks and any other means of formatting the data, if such data is given.
         """
         
         messages = [
