@@ -47,14 +47,31 @@
 
 /* Style for the inner box with gradient */
 #workspace-inner-box {
-    --box-position: 17%; /* Initial position value - will be updated dynamically */
-    --gradient-half-width: 10px; /* Default gradient half width */
-    background: linear-gradient(to right, 
-                black calc(var(--box-position) - var(--gradient-half-width)), 
-                white calc(var(--box-position) - var(--gradient-half-width)), 
-                white calc(var(--box-position) + var(--gradient-half-width)), 
-                black calc(var(--box-position) + var(--gradient-half-width)));
+    --box-position: 50px; /* Initial position value in pixels - will be updated dynamically */
+    --gradient-half-width: 20px; /* Increased from 10px to 20px for 40px total width */
+
+    background-image: 
+      /* Left semicircle: white on right, transparent on left */
+      radial-gradient(circle at right center, white 10px, transparent 10.1px),
+      /* Center white box */
+      linear-gradient(white, white),
+      /* Right semicircle: white on left, transparent on right */
+      radial-gradient(circle at left center, white 10px, transparent 10.1px);
+    background-repeat: no-repeat;
+    /* Left & right semicircles are fixed at 20px; center is dynamic */
+    background-size: 20px 20px, calc(var(--gradient-half-width) + 2px) 20px, 20px 20px;
+    /* 
+      Positions:
+        • Left semicircle: its block ends at the white box's left edge, i.e.
+          (offset – 20px).
+        • White center box: starts at the offset value.
+        • Right semicircle: starts at the right edge of the white box,
+          i.e. (offset + gradient-half-width).
+    */
+    background-position: 
+      calc(var(--box-position) - 9px - 20px) center,
+      calc(var(--box-position) - 9px - 1px) center,
+      calc(var(--box-position) - 9px + var(--gradient-half-width)) center;
     padding: 2px;
     border-radius: 3px;
-    spacing: 0px;  /* No spacing between buttons */
 }
