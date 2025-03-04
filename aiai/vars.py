@@ -18,3 +18,21 @@ tools= [
     }
 ]
 
+report_schema = {
+    "type": "object",
+    "properties": {
+        "[THINK] [/THINK]": {"type": "string"},
+        "MARKDOWN PHD LEVEL REPORT": {"type": "string"},
+        "CONCLUSION": {"type": "string"},
+    },
+    "required": ["title", "director", "year"],
+    "additionalProperties": False
+}
+
+from pydantic import BaseModel, Field
+
+
+class ReportAnswer(BaseModel):
+    think: str = Field(..., alias="[THINK] [/THINK]")
+    report_content: str = Field(..., alias="MARKDOWN PHD LEVEL REPORT")
+    conclusion: str = Field(..., alias="CONCLUSION")

@@ -4,6 +4,8 @@ modules/__pycache__
 widgets/__pycache__
 .aider*
 aiai/__pycache__
-aiai/Summary
+aiai/summary
+aiai/Summary/
 aiai/reports
 aiai/data
+aiai/.env

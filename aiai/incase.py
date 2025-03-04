@@ -179,40 +179,40 @@ class LLMProcessor:
             # Return a single question (the original query) as fallback
             return [query]
     
-    def summarize_page(self, page_content: str, url: str, title: str, sub_question: str) -> Dict[str, Any]:
+    def summarize_question_sources(self, sources: List[Dict[str, Any]], sub_question: str) -> Dict[str, Any]:
         """
-        Process webpage content to generate a summary relevant to the sub-question.
+        Process all webpage contents for a sub-question to generate a comprehensive summary.
         
         Args:
-            page_content: The extracted content from the webpage
-            url: The URL of the webpage
-            title: The title of the webpage
+            sources: List of dictionaries containing source metadata and content
             sub_question: The specific sub-question being researched
             
         Returns:
             Dictionary containing the summary and metadata
         """
-        system_prompt = "You are a helpful assistant that summarizes webpage content accurately and concisely."
+        system_prompt = "You are a helpful assistant that summarizes multiple sources of content accurately and concisely."
+        
+        # Prepare the combined sources text
+        sources_text = ""
+        for i, source in enumerate(sources, 1):
+            sources_text += f"\n\nSOURCE {i}: {source['title']}\nURL: {source['url']}\n\n{source['content']}\n---\n"
         
         user_message = f"""
-        Please summarize the following webpage content in relation to this specific research question: "{sub_question}"
+        Please synthesize information from the following sources to answer this research question: "{sub_question}"
         
-        URL: {url}
-        Title: {title}
-        
-        Content:
-        {page_content[:16000]}
+        {sources_text}
         
         Your summary should:
         1. Focus on information relevant to the research question
-        2. Extract key facts, data points, and insights
+        2. Extract key facts, data points, and insights from ALL sources
         3. Be clear and as detailed as possible
         4. Maintain factual accuracy
         5. Note any limitations or gaps in the information
-        6. Do not mention phrases like "based on xyz" or anything like that, return only and only the highly detailed summary, failing to do so will be considered as an incorrect response.
-        7. Try to write the summary, not as a summary but a replacement for the entire page.
-        8. Try to include data alalysis, statistics, and any other relevant information.
-        9. The summary should, if applicable include tables, good formating, code blocks and any other means of formatting the data, if such data is given.
+        6. Do not mention phrases like "based on xyz" or anything like that, return only and only the highly detailed synthesis
+        7. Try to write the summary, not as a summary but a comprehensive answer to the question
+        8. Include data analysis, statistics, and any other relevant information
+        9. The summary should, if applicable include tables, good formatting, code blocks and any other means of formatting the data, if such data is given
+        10. Integrate information from multiple sources when possible rather than treating each source separately
         """
         
         messages = [
@@ -231,58 +231,53 @@ class LLMProcessor:
             summary = response.choices[0].message.content
             
             return {
-                "url": url,
-                "title": title,
                 "sub_question": sub_question,
-                "content_length": len(page_content),
+                "source_count": len(sources),
+                "sources": [{"url": s["url"], "title": s["title"]} for s in sources],
                 "summary": summary,
                 "timestamp": datetime.now().isoformat()
             }
         
         except Exception as e:
-            logger.error(f"Error summarizing page: {str(e)}")
+            logger.error(f"Error summarizing sources for question: {str(e)}")
             return {
-                "url": url,
-                "title": title,
                 "sub_question": sub_question,
-                "content_length": len(page_content),
+                "source_count": len(sources),
+                "sources": [{"url": s["url"], "title": s["title"]} for s in sources],
                 "summary": f"Error generating summary: {str(e)}",
                 "timestamp": datetime.now().isoformat()
             }
     
-    def generate_comprehensive_report(self, query: str, all_summaries: List[Dict[str, Any]]) -> str:
+    def generate_comprehensive_report(self, query: str, question_summaries: List[Dict[str, Any]]) -> str:
         """
-        Generate a comprehensive report by combining all the page summaries.
+        Generate a comprehensive report by combining all the question summaries.
         
         Args:
             query: The original research query
-            all_summaries: List of all page summaries organized by sub-question
+            question_summaries: List of summaries for each sub-question
             
         Returns:
             A comprehensive report combining all summaries
         """
-        # Organize summaries by sub-question
-        summaries_by_question = {}
-        for summary in all_summaries:
-            question = summary["sub_question"]
-            if question not in summaries_by_question:
-                summaries_by_question[question] = []
-            summaries_by_question[question].append(summary)
-        
         # Create the combined report
-        report = f"# Comprehensive Research Report\n\n"
-        report += f"## Summary\nThis report combines research from {len(all_summaries)} sources " \
-                f"across {len(summaries_by_question)} research questions.\n\n"
+        report = f"# Comprehensive Research Report: {query}\n\n"
+        report += f"## Summary\nThis report addresses {len(question_summaries)} key aspects of the query, " \
+                f"synthesizing information from multiple sources.\n\n"
         
-        # Add each sub-question and its summaries
-        for question, summaries in summaries_by_question.items():
-            report += f"## {question}\n\n"
+        # Add each sub-question and its summary
+        for i, summary in enumerate(question_summaries, 1):
+            # Add question heading
+            report += f"## {summary['sub_question']}\n\n"
             
-            for i, summary in enumerate(summaries, 1):
-                report += f"### Source {i}: {summary['title']}\n"
-                report += f"URL: {summary['url']}\n\n"
-                report += f"{summary['summary']}\n\n"
-                report += "---\n\n"
+            # Add summary content
+            report += f"{summary['summary']}\n\n"
+            
+            # Add sources used
+            report += "### Sources\n"
+            for j, source in enumerate(summary['sources'], 1):
+                report += f"{j}. [{source['title']}]({source['url']})\n"
+            
+            report += "\n---\n\n"
         
         # Add timestamp
         report += f"\n\nReport generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
@@ -302,7 +297,7 @@ class WebSearchEngine:
                                sub_question: str,
                                num_results: int = 7,
                                blocked_domains: List[str] = None,
-                               max_parallel: int = 5) -> List[Dict[str, Any]]:
+                               max_parallel: int = 5) -> Dict[str, Any]:
         """
         Search and scrape content for a specific sub-question.
         
@@ -313,7 +308,7 @@ class WebSearchEngine:
             max_parallel: Maximum number of parallel scraping tasks
             
         Returns:
-            List of page summaries for this sub-question
+            Dictionary with question summary and metadata
         """
         if blocked_domains is None:
             blocked_domains = ["x.com", "twitter.com", "facebook.com", "instagram.com", "youtube.com", "tiktok.com", "reddit.com"]
@@ -328,7 +323,14 @@ class WebSearchEngine:
             logger.info(f"Search completed in {time.time() - start_time:.2f}s, found {len(search_results)} results")
         except Exception as e:
             logger.error(f"Error during search: {str(e)}")
-            return []
+            return {
+                "sub_question": sub_question,
+                "error": f"Search failed: {str(e)}",
+                "source_count": 0,
+                "sources": [],
+                "summary": "Unable to retrieve information for this question.",
+                "timestamp": datetime.now().isoformat()
+            }
         
         # Extract and filter URLs
         urls = [result['href'] for result in search_results]
@@ -337,12 +339,19 @@ class WebSearchEngine:
         
         if not filtered_urls:
             logger.warning(f"No valid URLs found for sub-question: {sub_question}")
-            return []
+            return {
+                "sub_question": sub_question,
+                "error": "No valid URLs found after filtering",
+                "source_count": 0,
+                "sources": [],
+                "summary": "No valid sources found for this question.",
+                "timestamp": datetime.now().isoformat()
+            }
         
         logger.info(f"{len(filtered_urls)} URLs after filtering blocked domains")
         
         # Scrape content in parallel
-        scraped_pages = []
+        scraped_sources = []
         
         with ThreadPoolExecutor(max_workers=max_parallel) as executor:
             future_to_url = {executor.submit(self.content_extractor.extract_readable_content, url): url for url in filtered_urls}
@@ -353,34 +362,35 @@ class WebSearchEngine:
                     content = future.result()
                     if content and len(content) > 200:  # Ensure content is substantial
                         # Store page info for processing
-                        scraped_pages.append({
+                        scraped_sources.append({
                             "url": url,
                             "title": titles.get(url, "No Title"),
-                            "content": content,
-                            "sub_question": sub_question
+                            "content": content
                         })
                         logger.info(f"Successfully scraped content from {url}")
                 
                 except Exception as e:
                     logger.error(f"Error processing {url}: {str(e)}")
         
-        if not scraped_pages:
+        if not scraped_sources:
             logger.error(f"No content was successfully scraped for sub-question: {sub_question}")
-            return []
+            return {
+                "sub_question": sub_question,
+                "error": "Failed to extract content from any sources",
+                "source_count": 0,
+                "sources": [],
+                "summary": "Unable to extract content from sources for this question.",
+                "timestamp": datetime.now().isoformat()
+            }
         
-        # Process each page with LLM to generate summaries
-        page_summaries = []
-        for page in scraped_pages:
-            summary = self.llm_processor.summarize_page(
-                page_content=page["content"],
-                url=page["url"],
-                title=page["title"],
-                sub_question=sub_question
-            )
-            page_summaries.append(summary)
+        # Process all sources together to generate a summary for this question
+        question_summary = self.llm_processor.summarize_question_sources(
+            sources=scraped_sources,
+            sub_question=sub_question
+        )
         
-        logger.info(f"Generated {len(page_summaries)} summaries for sub-question: {sub_question}")
-        return page_summaries
+        logger.info(f"Generated summary from {len(scraped_sources)} sources for sub-question: {sub_question}")
+        return question_summary
     
     def search(self, 
                query: str,
@@ -433,8 +443,8 @@ class WebSearchEngine:
             json.dump(sub_questions, f, indent=2)
         logger.info(f"Saved {len(sub_questions)} sub-questions to {questions_file}")
         
-        # Step 2: Search each sub-question
-        all_summaries = []
+        # Step 2: Search each sub-question and generate per-question summaries
+        question_summaries = []
         
         for i, sub_question in enumerate(sub_questions, 1):
             logger.info(f"Processing sub-question {i}/{len(sub_questions)}: {sub_question}")
@@ -444,36 +454,35 @@ class WebSearchEngine:
             if not os.path.exists(question_folder):
                 os.makedirs(question_folder)
             
-            # Search and summarize for this sub-question
-            summaries = self.search_for_sub_question(
+            # Search and summarize for this sub-question - now we get a summary for all sources
+            question_summary = self.search_for_sub_question(
                 sub_question=sub_question,
                 num_results=sites_per_question,
                 blocked_domains=blocked_domains
             )
             
-            # Save summaries for this question
-            if summaries:
-                question_summaries_file = os.path.join(question_folder, "summaries.json")
-                with open(question_summaries_file, 'w', encoding='utf-8') as f:
-                    json.dump(summaries, f, indent=2)
-                
-                all_summaries.extend(summaries)
+            # Save summary for this question
+            question_summary_file = os.path.join(question_folder, "summary.json")
+            with open(question_summary_file, 'w', encoding='utf-8') as f:
+                json.dump(question_summary, f, indent=2)
+            
+            question_summaries.append(question_summary)
             
             # Delay between sub-questions to respect rate limits
             if i < len(sub_questions):
                 logger.info("Pausing before next sub-question...")
                 time.sleep(5)
         
-        # Save all summaries
-        all_summaries_file = os.path.join(search_folder, "all_summaries.json")
-        with open(all_summaries_file, 'w', encoding='utf-8') as f:
-            json.dump(all_summaries, f, indent=2)
+        # Save all question summaries
+        all_question_summaries_file = os.path.join(search_folder, "all_question_summaries.json")
+        with open(all_question_summaries_file, 'w', encoding='utf-8') as f:
+            json.dump(question_summaries, f, indent=2)
         
         # Step 3: Generate comprehensive report
         logger.info("Generating comprehensive report...")
-        report = self.llm_processor.generate_comprehensive_report(query, all_summaries)
+        report = self.llm_processor.generate_comprehensive_report(query, question_summaries)
         
-        # Save report to data folder (original location)
+        # Save report to data folder
         report_file = os.path.join(search_folder, "comprehensive_report.md")
         with open(report_file, 'w', encoding='utf-8') as f:
             f.write(report)
@@ -495,7 +504,7 @@ class WebSearchEngine:
         result = {
             "query": query,
             "sub_questions": sub_questions,
-            "summary_count": len(all_summaries),
+            "question_summaries_count": len(question_summaries),
             "report": report,
             "timestamp": current_time,
             "output_folder": search_folder,

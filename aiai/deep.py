@@ -11,6 +11,8 @@ from typing import List, Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from openai import OpenAI
+import dotenv
+
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -106,12 +108,13 @@ class LLMProcessor:
     
     def __init__(self, api_key=None, base_url=None):
         """Initialize LLM processor."""
-        self.api_key = api_key or "csk-pd3m4cwpk3pppkkv3vtnxwnnv92kf5txctek86ff3j66xwf2"
-        self.base_url = base_url or "https://api.cerebras.ai/v1"
+        self.api_key = os.getenv("API_KEY")
+        self.base_url = os.getenv("BASE_URL")
         self.client = OpenAI(
             api_key=self.api_key,
             base_url=self.base_url
         )
+        self.model = os.getenv("MODEL")
     
     def generate_sub_questions(self, query: str) -> List[str]:
         """
@@ -125,7 +128,9 @@ class LLMProcessor:
         """
         system_prompt = """You are a research assistant that decomposes complex questions into specific sub-questions.
         Your task is to break down the main research query into 3-7 specific questions that together will provide a comprehensive answer.
-        Return your response as a JSON array of questions only."""
+        Return your response as a JSON array of questions only.
+        YOU MUST KEEP YOUR QUESTIONS TIMELESS, MEANING THEY SHOULD BE RELEVANT REGARDLESS OF THE CURRENT TIME OR EVENTS(for example, rather than actually mention the lastest version of xyz to your knowledge, mention "latest version", etc).
+        """
         
         user_message = f"""
         I need to research the following topic: "{query}"
@@ -134,6 +139,7 @@ class LLMProcessor:
         Each question should focus on a different aspect of the topic.
         Return ONLY a JSON array with the questions, like this: ["Question 1", "Question 2", "Question 3"].
         Do not include any explanations or other text outside the JSON format.
+         YOU MUST KEEP YOUR QUESTIONS TIMELESS, MEANING THEY SHOULD BE RELEVANT REGARDLESS OF THE CURRENT TIME OR EVENTS(for example, rather than actually mention the lastest version of xyz to your knowledge, mention "latest version", etc).
         """
         
         messages = [
@@ -143,7 +149,7 @@ class LLMProcessor:
         
         try:
             response = self.client.chat.completions.create(
-                model="llama-3.3-70b",
+                model=self.model,
                 messages=messages,
                 temperature=0.75,
                 max_tokens=2048,
@@ -198,7 +204,7 @@ class LLMProcessor:
         Title: {title}
         
         Content:
-        {page_content[:16000]}
+        {page_content}
         
         Your summary should:
         1. Focus on information relevant to the research question
@@ -219,7 +225,7 @@ class LLMProcessor:
         
         try:
             response = self.client.chat.completions.create(
-                model="llama-3.3-70b",
+                model=self.model,
                 messages=messages,
                 temperature=0.5,
                 max_tokens=16000,
@@ -459,7 +465,7 @@ class WebSearchEngine:
             # Delay between sub-questions to respect rate limits
             if i < len(sub_questions):
                 logger.info("Pausing before next sub-question...")
-                time.sleep(5)
+                time.sleep(0.5)
         
         # Save all summaries
         all_summaries_file = os.path.join(search_folder, "all_summaries.json")
@@ -514,6 +520,8 @@ def search(query, sites_per_question=7, blocked_domains=None):
     Returns:
         Dictionary with comprehensive report and search metadata
     """
+    dotenv.load_dotenv()
+    print(f"Env contents: {os.getenv('API_KEY'), os.getenv('BASE_URL'), os.getenv('MODEL')}")
     search_engine = WebSearchEngine()
     return search_engine.search(
         query=query,

@@ -4,9 +4,12 @@ from pydantic import BaseModel
 from typing import List, Dict
 from openai import OpenAI
 import json
-from vars import tools
+from vars import tools, report_schema, ReportAnswer
 from deep import search
 import os
+import dotenv
+from pydantic import BaseModel
+
 
 app = FastAPI(title="AI loda lassan")
 
@@ -18,6 +21,20 @@ class ChatRequest(BaseModel):
     temperature: float
     max_tokens: int
     tool_history: bool = True  # Default to True for backward compatibility
+    api_key_pro: str
+    base_url_pro: str
+    model_pro: str
+
+
+def setenv(apikey, baseurl, model):
+    """Write API key, base URL, and model to .env file."""
+    with open('.env', 'w') as f:
+        f.write(f"API_KEY={apikey}\n")
+        f.write(f"BASE_URL={baseurl}\n")
+        f.write(f"MODEL={model}\n")
+    dotenv.load_dotenv()
+
+
 
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
@@ -42,6 +59,7 @@ async def chat_endpoint(request: ChatRequest):
 
 @app.post("/deepresearch")
 async def deepresearch_endpoint(request: ChatRequest):
+    setenv(request.api_key_pro, request.base_url_pro, request.model_pro)
     print(f"Request: {request}")
     client = OpenAI(
         api_key=request.api_key,
@@ -79,9 +97,11 @@ async def deepresearch_endpoint(request: ChatRequest):
                     }
                 )
             # Get the final response from the model
-            second_response = client.chat.completions.create(
+            second_response = client.beta.chat.completions.parse(
                 model=request.model,
-                messages=messages
+                messages=messages,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
             )
             
             # Save the response content to a markdown file
