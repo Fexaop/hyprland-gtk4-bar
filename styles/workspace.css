@@ -11,9 +11,15 @@
     min-height: 0;
 }
 
+/* Empty workspace styling - smaller dot */
+.workspace-button.empty {
+    color: #555555;
+    font-size: 14px;  /* Make dot larger */
+    padding-bottom: 2px; /* Adjust vertical position of the dot */
+}
 
 .workspace-button.has-windows {
-    color: white;
+    color: #F5F5F580;
 }
 
 /* Button directly under gradient should have black text */
@@ -21,10 +27,13 @@
     color: black;
 }
 
-
-
 /* When button has windows but is under gradient, text should be black */
 .workspace-button.has-windows.under-gradient {
+    color: black;
+}
+
+/* Empty workspace under gradient styling */
+.workspace-button.empty.under-gradient {
     color: black;
 }
 

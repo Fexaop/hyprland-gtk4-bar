@@ -68,16 +68,15 @@ class WorkspaceIndicator(Gtk.Box):
         self.animation_current_position = 50  # Current position during animation
         self.normal_gradient_half_width = 20  # Increased from 10px to 20px for 40px total width
         
-        # Animation phase constants
-        self.PHASE_DECREASE_MARGINS = 0
-        self.PHASE_MOVE_GRADIENT = 1
-        self.PHASE_INCREASE_MARGINS = 2
+        # Animation phase constants - simplified to two phases
+        self.PHASE_MOVE_GRADIENT_AND_ADJUST_MARGINS = 0
+        self.PHASE_FINALIZE = 1
         
         # Multi-phase animation control
-        self.animation_phase = self.PHASE_DECREASE_MARGINS
+        self.animation_phase = self.PHASE_MOVE_GRADIENT_AND_ADJUST_MARGINS
         self.animation_active = False
-        self.phase_durations = [100, 250, 150]  # milliseconds for each phase
-        self.phase_start_times = [0, 0, 0]  # Will be calculated during animation
+        self.phase_durations = [350, 150]  # milliseconds for each phase
+        self.phase_start_times = [0, 0]  # Will be calculated during animation
         
         # Margin animation variables
         self.previous_active_button = None
@@ -93,6 +92,16 @@ class WorkspaceIndicator(Gtk.Box):
         # Add gradient width tracking variables
         self.gradient_width_at_phase_change = self.normal_gradient_half_width
         self.previous_workspace = None  # New variable to track previous workspace
+        
+        # Add a flag to track first realization
+        self.is_first_realization = True
+        
+        # Create controller for realization event
+        controller = Gtk.EventControllerFocus.new()
+        self.add_controller(controller)
+        
+        # Connect to mapping event for gradient positioning
+        self.connect("map", self.on_map_event)
         
         # Initial update
         self.update_workspaces()
@@ -149,8 +158,12 @@ class WorkspaceIndicator(Gtk.Box):
         # Create buttons for current range
         start, end = self.current_range
         for i in range(start, end + 1):
+            # Initially create with number label, will be updated in update_workspaces
             button = Gtk.Button(label=str(i))
             button.set_size_request(18, 18)  # Smaller button size
+            
+            # Store the workspace number as a Python attribute instead of using set_data
+            button.workspace_id = i
             
             # Add CSS classes for styling
             button.add_css_class("workspace-button")
@@ -275,15 +288,37 @@ class WorkspaceIndicator(Gtk.Box):
                 for i, button in self.workspace_buttons.items():
                     # Remove active class from all
                     button.remove_css_class("active")
+                    button.remove_css_class("empty")
                     # Reset margins
                     button.set_margin_start(0)
                     button.set_margin_end(0)
+                
+                # Create lookup dict for workspaces with window counts for new range
+                workspace_dict = {ws.get("id"): ws.get("windows", 0) for ws in workspaces}
+                
+                # Update all workspace labels and styles
+                for i, button in self.workspace_buttons.items():
+                    # Update window status
+                    has_windows = workspace_dict.get(i, 0) > 0
                     
-                    # Set active state and margins for current active
+                    # Update label based on active state and window presence
                     if i == active_id:
+                        button.set_label(str(i))  # Always show number for active workspace
                         button.add_css_class("active")
                         button.set_margin_start(self.margin_target_value)
                         button.set_margin_end(self.margin_target_value)
+                    else:
+                        # Show dot for empty workspaces, number for workspaces with windows
+                        if has_windows:
+                            button.set_label(str(i))
+                            button.add_css_class("has-windows")
+                        else:
+                            button.set_label("•")  # Unicode dot character (more visible than a period)
+                            button.add_css_class("empty")
+                
+                # Update the gradient position immediately after range change
+                # Use a short delay to ensure widget sizes are updated
+                GLib.timeout_add(50, self.update_initial_gradient_position)
                 
                 # Update previous workspace when range changes
                 self.previous_workspace = active_id
@@ -292,18 +327,43 @@ class WorkspaceIndicator(Gtk.Box):
         # Create lookup dict for workspaces with window counts
         workspace_dict = {ws.get("id"): ws.get("windows", 0) for ws in workspaces}
         
-        # Update each workspace button's has-windows state
+        # Keep track if the active workspace changed
+        active_changed = (self.previous_workspace != active_id)
+        
+        # Update each workspace button's state and label
         for i, button in self.workspace_buttons.items():
-            # Update active state without changing margins yet
+            # Check if this workspace has windows
+            has_windows = workspace_dict.get(i, 0) > 0
+            
+            # Update active state
+            was_active = button.has_css_class("active")
+            
             if i == active_id:
-                button.add_css_class("active")
+                # This is the active workspace
+                if not was_active:
+                    # Workspace just became active, always show number
+                    button.set_label(str(i))
+                    button.add_css_class("active")
+                    # Will handle margin animation later
+                    
+                    # Remove the empty class if it was there
+                    button.remove_css_class("empty")
             else:
-                button.remove_css_class("active")
-                
-            # Set has-windows state
-            button.remove_css_class("has-windows")
-            if workspace_dict.get(i, 0) > 0:
-                button.add_css_class("has-windows")
+                # This is an inactive workspace
+                if was_active:
+                    # Was active before, now inactive
+                    button.remove_css_class("active")
+                    # Will handle margin animation later
+                    
+                # Update label and class based on window presence
+                if has_windows:
+                    button.set_label(str(i))
+                    button.add_css_class("has-windows")
+                    button.remove_css_class("empty")
+                else:
+                    button.set_label("•")  # Unicode dot character
+                    button.remove_css_class("has-windows")
+                    button.add_css_class("empty")
         
         # Only run animation if the workspace changed
         if self.previous_workspace is None or self.previous_workspace != active_id:
@@ -315,57 +375,42 @@ class WorkspaceIndicator(Gtk.Box):
         if self.frame and active_id:
             new_active_button = self.workspace_buttons.get(active_id)
             
-            # Find previous active button (the one with margins)
+            # Find previous active button (the one with margins) -- kept for backward compatibility
             previous_active_button = None
             for btn in self.workspace_buttons.values():
                 if btn != new_active_button and (btn.get_margin_start() > 0 or btn.get_margin_end() > 0):
                     previous_active_button = btn
                     break
             
-            # If there's no previous active button or it's the same as new one, skip first phase
-            skip_first_phase = (previous_active_button is None or previous_active_button == new_active_button)
-            
             if new_active_button and new_active_button.get_realized():
-                # Cancel any existing animation
                 if self.animation_source_id is not None:
                     GLib.source_remove(self.animation_source_id)
                     self.animation_source_id = None
                 
-                # Set up animation parameters
                 self.animation_active = True
                 self.animation_start_time = GLib.get_monotonic_time()
-                
-                # Gradient animation parameters
                 current_position = self.animation_current_position
                 target_position = self.calculate_gradient_position(active_id)
                 self.animation_start_position = current_position
                 self.animation_target_position = target_position
-                
-                # Button references for animation
                 self.previous_active_button = previous_active_button
                 self.current_active_button = new_active_button
                 
-                # Calculate phase start times
-                if skip_first_phase:
-                    # Skip margin decrease phase
-                    self.animation_phase = self.PHASE_MOVE_GRADIENT
-                    self.phase_start_times = [0, 0, self.phase_durations[0] + self.phase_durations[1]]
-                else:
-                    # Include all phases
-                    self.animation_phase = self.PHASE_DECREASE_MARGINS
-                    self.phase_start_times = [0, self.phase_durations[0], self.phase_durations[0] + self.phase_durations[1]]
+                # Collect all buttons (except active) that have margins to animate
+                self.animated_prev_buttons = [btn for btn in self.workspace_buttons.values() 
+                                              if btn != new_active_button and (btn.get_margin_start() > 0 or btn.get_margin_end() > 0)]
                 
-                # Start the multi-phase animation
-                self.animation_source_id = GLib.timeout_add(16, self.multi_phase_animation_step)
+                self.animation_phase = self.PHASE_MOVE_GRADIENT_AND_ADJUST_MARGINS
+                self.phase_start_times = [0, self.phase_durations[0]]
+                self.animation_source_id = GLib.timeout_add(7, self.multi_phase_animation_step)
             else:
-                # Button not realized yet, try again shortly
                 GLib.timeout_add(20, self.start_animation_sequence, active_id)
                 return False
         
-        return False  # Don't repeat
-    
+        return False
+
     def multi_phase_animation_step(self):
-        """Handle multi-phase animation with margins and gradient movement"""
+        """Handle multi-phase animation with simultaneous margin adjustments"""
         if not self.frame or not self.animation_active:
             self.animation_source_id = None
             return False
@@ -377,108 +422,100 @@ class WorkspaceIndicator(Gtk.Box):
             self.finish_animation()
             return False
 
-        # Track phase transitions
-        previous_phase = self.animation_phase
+        if self.animation_phase == self.PHASE_MOVE_GRADIENT_AND_ADJUST_MARGINS and elapsed_total >= self.phase_start_times[1]:
+            self.animation_phase = self.PHASE_FINALIZE
         
-        if self.animation_phase == self.PHASE_MOVE_GRADIENT and self.current_active_button and self.current_active_button.get_realized():
-            allocation = self.current_active_button.get_allocation()
-            btn_start = allocation.x
-            btn_end = allocation.x + allocation.width
-            if btn_start <= self.animation_current_position <= btn_end:
-                # Store current gradient width before phase change
-                # This will be used to smoothly transition the width back to normal
-                distance = abs(self.animation_target_position - self.animation_start_position)
-                overall_progress = min((elapsed_total - self.phase_start_times[0]) / (self.phase_durations[0] + self.phase_durations[1]), 1.0)
-                peak_width = self.normal_gradient_half_width + 0.4 * distance
-                if overall_progress <= 0.5:
-                    self.gradient_width_at_phase_change = self.normal_gradient_half_width + (peak_width - self.normal_gradient_half_width) * (overall_progress / 0.5)
-                else:
-                    self.gradient_width_at_phase_change = peak_width - (peak_width - self.normal_gradient_half_width) * ((overall_progress - 0.5) / 0.5)
-                
-                # Change phase
-                self.animation_phase = self.PHASE_INCREASE_MARGINS
-                self.phase_start_times[self.PHASE_INCREASE_MARGINS] = elapsed_total
-                self.phase_durations[self.PHASE_INCREASE_MARGINS] = max(500 - elapsed_total, 50)
-        
-        if self.animation_phase == self.PHASE_DECREASE_MARGINS and elapsed_total >= self.phase_start_times[1]:
-            self.animation_phase = self.PHASE_MOVE_GRADIENT
-        
-        # Detect if phase just changed
-        phase_changed = previous_phase != self.animation_phase
-        
-        # Calculate progress for current phase
         phase_start_time = self.phase_start_times[self.animation_phase]
         phase_duration = self.phase_durations[self.animation_phase]
         phase_elapsed = elapsed_total - phase_start_time
         phase_progress = min(phase_elapsed / phase_duration, 1.0)
         eased_progress = 0.5 * (1 - math.cos(math.pi * phase_progress))
         
-        if self.animation_phase == self.PHASE_DECREASE_MARGINS:
-            if self.previous_active_button:
-                start_margin = self.margin_target_value
-                current_margin = start_margin * (1 - eased_progress)
-                margin_value = int(round(current_margin))
-                self.previous_active_button.set_margin_start(margin_value)
-                self.previous_active_button.set_margin_end(margin_value)
-        
-        elif self.animation_phase == self.PHASE_MOVE_GRADIENT:
-            overall_progress = min((elapsed_total - self.phase_start_times[0]) / (self.phase_durations[0] + self.phase_durations[1]), 1.0)
-            overall_eased = 0.5 * (1 - math.cos(math.pi * overall_progress))
-            
-            # Position animation
+        if self.animation_phase == self.PHASE_MOVE_GRADIENT_AND_ADJUST_MARGINS:
             self.animation_current_position = (
                 self.animation_start_position +
-                (self.animation_target_position - self.animation_start_position) * overall_eased
+                (self.animation_target_position - self.animation_start_position) * eased_progress
             )
-            
-            # Width animation
             distance = abs(self.animation_target_position - self.animation_start_position)
             peak_width = self.normal_gradient_half_width + 0.4 * distance
-            if overall_progress <= 0.5:
-                current_half_width = self.normal_gradient_half_width + (peak_width - self.normal_gradient_half_width) * (overall_progress / 0.5)
+            if phase_progress <= 0.5:
+                current_half_width = self.normal_gradient_half_width + (peak_width - self.normal_gradient_half_width) * (phase_progress / 0.5)
             else:
-                current_half_width = peak_width - (peak_width - self.normal_gradient_half_width) * ((overall_progress - 0.5) / 0.5)
+                current_half_width = peak_width - (peak_width - self.normal_gradient_half_width) * ((phase_progress - 0.5) / 0.5)
             
             self.set_gradient_position(self.animation_current_position, current_half_width)
+            
+            # Calculate raw margin values:
+            # Active button raw margin increases from 0 to margin_target_value.
+            raw_active_margin = self.margin_target_value * eased_progress
+            # Each previously active button raw margin decreases from margin_target_value to 0.
+            raw_prev_margin = self.margin_target_value * (1 - eased_progress)
+            
+            # Total raw margin sum over involved buttons:
+            # We combine the current active and all buttons in the animated_prev_buttons queue.
+            num_prev = len(self.animated_prev_buttons)
+            total_raw = raw_active_margin + num_prev * raw_prev_margin
+
+            # Enforce constant total margin = margin_target_value
+            scale = 1.0
+            if total_raw > 0:
+                scale = self.margin_target_value / total_raw
+
+            # Set normalized margin for current active.
+            new_margin_active = int(round(raw_active_margin * scale))
+            if self.current_active_button:
+                self.current_active_button.set_margin_start(new_margin_active)
+                self.current_active_button.set_margin_end(new_margin_active)
+                if hasattr(self.current_active_button, 'workspace_id'):
+                    self.current_active_button.set_label(str(self.current_active_button.workspace_id))
+            
+            # Set normalized margin for each previously active button.
+            for btn in self.animated_prev_buttons:
+                new_margin = int(round(raw_prev_margin * scale))
+                btn.set_margin_start(new_margin)
+                btn.set_margin_end(new_margin)
+                # When mostly decreased and no windows, change label to dot.
+                if hasattr(btn, 'workspace_id'):
+                    workspace_id = btn.workspace_id
+                    workspaces = self.hyprland.get_workspaces()
+                    workspace_dict = {ws.get("id"): ws.get("windows", 0) for ws in workspaces}
+                    has_windows = workspace_dict.get(workspace_id, 0) > 0
+                    if not has_windows and eased_progress > 0.6:
+                        btn.set_label("•")
+                        btn.add_css_class("empty")
         
-        elif self.animation_phase == self.PHASE_INCREASE_MARGINS:
+        elif self.animation_phase == self.PHASE_FINALIZE:
             if self.current_active_button and self.current_active_button.get_realized():
-                # Position animation - follow the expanding button center
                 allocation = self.current_active_button.get_allocation()
                 btn_center = allocation.x + (allocation.width / 2)
-                self.animation_current_position = (
-                    self.animation_current_position * 0.7 + btn_center * 0.3
-                )
-                
-                # Margin animation
-                current_margin = self.margin_target_value * eased_progress
-                margin_value = int(round(current_margin))
-                self.current_active_button.set_margin_start(margin_value)
-                self.current_active_button.set_margin_end(margin_value)
-                
-                # Gradient width animation - gradually return to normal width
-                # This ensures continuous width animation from phase 2 to phase 3
+                self.animation_current_position = self.animation_current_position * 0.7 + btn_center * 0.3
+                final_margin = int(round(self.margin_target_value))
+                self.current_active_button.set_margin_start(final_margin)
+                self.current_active_button.set_margin_end(final_margin)
                 current_half_width = self.gradient_width_at_phase_change + (self.normal_gradient_half_width - self.gradient_width_at_phase_change) * eased_progress
-                
                 self.set_gradient_position(self.animation_current_position, current_half_width)
+                if self.previous_active_button:
+                    self.previous_active_button.set_margin_start(0)
+                    self.previous_active_button.set_margin_end(0)
         
         return True
-    
+
     def finish_animation(self):
         """Clean up at the end of animation"""
-        # Make sure final state is correct
         if self.current_active_button:
             self.current_active_button.set_margin_start(self.margin_target_value)
             self.current_active_button.set_margin_end(self.margin_target_value)
-            
-            # Ensure gradient is centered on the button
             if self.current_active_button.get_realized():
                 allocation = self.current_active_button.get_allocation()
                 final_pos = allocation.x + (allocation.width / 2)
                 self.animation_current_position = final_pos
                 self.set_gradient_position(final_pos)
         
-        # Reset animation state
+        # Ensure all animated previous buttons have their margins reset
+        for btn in self.animated_prev_buttons:
+            btn.set_margin_start(0)
+            btn.set_margin_end(0)
+        
         self.animation_active = False
         self.animation_source_id = None
         return False
@@ -486,6 +523,35 @@ class WorkspaceIndicator(Gtk.Box):
     def on_workspace_clicked(self, button, workspace_id):
         """Switch to the clicked workspace"""
         self.hyprland.switch_to_workspace(workspace_id)
+    
+    def on_map_event(self, widget):
+        """Handle the map event to position gradient after widget is visible"""
+        # Use a short delay to ensure widget sizes are finalized
+        GLib.timeout_add(50, self.update_initial_gradient_position)
+        return False
+    
+    def update_initial_gradient_position(self):
+        """Update the gradient position after initial realization"""
+        active_workspace = self.hyprland.get_active_workspace()
+        active_id = active_workspace.get("id") if active_workspace else None
+        
+        if active_id and active_id in self.workspace_buttons:
+            button = self.workspace_buttons[active_id]
+            # Make sure the button is realized and has a valid allocation
+            if button.get_realized():
+                allocation = button.get_allocation()
+                if allocation:
+                    # Calculate center position
+                    center_x = allocation.x + (allocation.width / 2)
+                    # Update gradient position
+                    self.animation_current_position = center_x
+                    self.set_gradient_position(center_x)
+                    # Reset animation parameters
+                    self.animation_start_position = center_x
+                    self.animation_target_position = center_x
+        
+        # Since this is a one-time correction, return False to not repeat
+        return False
 
 
 class WorkspaceBar(Gtk.Box):
@@ -528,8 +594,8 @@ class WorkspaceBar(Gtk.Box):
         scroll_controller.connect("scroll", self.workspace_indicator.on_scroll)
         self.add_controller(scroll_controller)
         
-        # Trigger initial gradient position update
-        self.workspace_indicator.update_workspaces()
+        # Don't trigger update immediately, wait for mapping
+        # self.workspace_indicator.update_workspaces()
 
 # For testing the module individually
 if __name__ == "__main__":
