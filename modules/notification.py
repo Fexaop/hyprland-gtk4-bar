@@ -21,9 +21,13 @@ class NotificationView(Gtk.Box):
             name="notification-container",
             spacing=8
         )
-        self.notification_image = Gtk.Image(
+        # Use Gtk.Picture for better scaling control
+        self.notification_image = Gtk.Picture(
             name="notification-image",
         )
+        self.notification_image.set_size_request(48, 48)
+        self.notification_image.set_content_fit(Gtk.ContentFit.CONTAIN)
+        self.notification_image.set_can_shrink(True)
 
         self.container_box.set_hexpand(True)
         self.notification_text = Gtk.Box(
@@ -31,26 +35,22 @@ class NotificationView(Gtk.Box):
             name="notification-text"
         )
         self.notification_text.set_valign(Gtk.Align.CENTER)
-        # Summary box with app name
+        # Summary box with combined sender and app name
         self.summary_box = Gtk.Box(
             orientation=Gtk.Orientation.HORIZONTAL,
             name="notification-summary-box"
         )
         
-        self.sender_label = Gtk.Label(name="notification-summary")
-        self.sender_label.set_halign(Gtk.Align.START)
-        self.sender_label.set_ellipsize(Pango.EllipsizeMode.END)
+        self.summary_label = Gtk.Label(name="notification-summary")
+        self.summary_label.set_halign(Gtk.Align.START)
+        self.summary_label.set_ellipsize(Pango.EllipsizeMode.END)
         
-        self.app_name_label = Gtk.Label(name="notification-app-name")
-        self.app_name_label.set_halign(Gtk.Align.START)
-        self.app_name_label.set_ellipsize(Pango.EllipsizeMode.END)
-        
-        self.summary_box.append(self.sender_label)
-        self.summary_box.append(self.app_name_label)
+        self.summary_box.append(self.summary_label)
         
         # Body label
         self.body_label = Gtk.Label()
         self.body_label.set_halign(Gtk.Align.START)
+        self.body_label.set_ellipsize(Pango.EllipsizeMode.END)
         
         # Add boxes to notification text
         self.notification_text.append(self.summary_box)
@@ -59,9 +59,13 @@ class NotificationView(Gtk.Box):
         # Add everything to container
         self.container_box.append(self.notification_image)
         self.container_box.append(self.notification_text)
-        # Third box: Close button
+        
+        # Third box: Close button - adjusted for floating
         self.close_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, name="notification-close-box")
         self.close_box.set_valign(Gtk.Align.CENTER)
+        self.close_box.set_halign(Gtk.Align.END)  # Align to the end
+        
+        self.notification_text.set_hexpand(True)  # Make text box expand to push close button
         
         self.close_button = Gtk.Button(label="×", name="notification-close-button")
         self.close_button.set_halign(Gtk.Align.CENTER)
@@ -82,23 +86,27 @@ class NotificationView(Gtk.Box):
         """Update the notification view with new data"""
         self.notification_id = notification.id
         
-        # Set the text labels
-        self.sender_label.set_text(notification.summary)
-        self.app_name_label.set_text(notification.app_name)
+        # Update summary label with "sender | app" format
+        self.summary_label.set_text(f"{notification.summary} | {notification.app_name}")
+        self.summary_label.set_max_width_chars(30)
+        self.summary_label.set_ellipsize(Pango.EllipsizeMode.END)
         print(notification.app_name)
+        # Set the body text and truncate if it exceeds 200px
         self.body_label.set_text(notification.body)
+        self.body_label.set_max_width_chars(30)
+        self.body_label.set_ellipsize(Pango.EllipsizeMode.END)
         
         # Handle notification image or app icon if present
         if notification.image_texture:
-            # Use the image data from notification
-            self.notification_image.set_from_paintable(notification.image_texture)
+            # Use the image data from notification as a paintable
+            self.notification_image.set_paintable(notification.image_texture)
             self.notification_image.set_visible(True)
         elif notification.app_icon and notification.app_icon.strip():
             # Try to use app_icon as fallback
             if os.path.isfile(notification.app_icon):
                 # If app_icon is a file path
                 try:
-                    self.notification_image.set_from_file(notification.app_icon)
+                    self.notification_image.set_filename(notification.app_icon)
                     self.notification_image.set_visible(True)
                 except Exception as e:
                     print(f"Error loading icon from file {notification.app_icon}: {e}")
@@ -111,14 +119,13 @@ class NotificationView(Gtk.Box):
             self.notification_image.set_visible(False)
             
     def _try_load_icon_name(self, icon_name):
-        """Try to load an icon by name from theme"""
+        """Try to load an icon by name from theme at size 48x48"""
+        icon_theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
         try:
-            # Try standard sizes in descending order
-            for size in [64, 48, 32, 24, 16]:
-                self.notification_image.set_from_icon_name(icon_name)
-                self.notification_image.set_pixel_size(size)
-                self.notification_image.set_visible(True)
-                return
+            # Load the icon directly at 48x48 pixels
+            icon = icon_theme.load_icon(icon_name, 48, 0)
+            self.notification_image.set_paintable(icon)
+            self.notification_image.set_visible(True)
         except Exception as e:
             print(f"Error loading icon {icon_name}: {e}")
             self.notification_image.set_visible(False)

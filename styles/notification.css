@@ -1,7 +1,7 @@
 #notification-box {
   opacity: 1;
   margin: -800px;
-  transition: all 0.45s cubic-bezier(0.5, 0.25, 0, 1);
+  transition: all 0.5s cubic-bezier(0.5, 0.25, 0, 1);
   padding: 10px;
   border-radius: 8px;
 }
@@ -52,4 +52,7 @@
 
 #notification-close-button:hover {
   background-color: rgba(80, 80, 80, 0.7);
+}
+.white-text button {
+  color: white;
 }
