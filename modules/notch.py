@@ -10,16 +10,13 @@ gi.require_version('GLib', '2.0')
 from gi.repository import Gtk, GLib, Gdk, Gio
 from gi.repository import Gtk4LayerShell as LayerShell
 import datetime
-from widgets.corner import Corner
 from modules.dashboard import Dashboard
 from modules.music import MusicPlayer
 from modules.notifications import NotificationCenter
 
 class Notch(Gtk.Box):
     def __init__(self, **kwargs):
-        super().__init__(
-            name="notch-box",
-        )
+        super().__init__(name="notch-box")
         self.set_halign(Gtk.Align.CENTER)
         self.set_valign(Gtk.Align.CENTER)  # Always at top
         
@@ -30,12 +27,12 @@ class Notch(Gtk.Box):
         
         # Track the original size
         self.normal_height = 30  # Default height for the notch
-        # Pass self to Dashboard so it can access the stack later.
+        
+        # Pass self to Dashboard
         self.dashboard = Dashboard(notch=self)
         self.active_event_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, name="active-event-box")
         self.active_event_box.set_halign(Gtk.Align.CENTER)
         self.active_event_box.set_valign(Gtk.Align.CENTER)
-        # Set margins and expansion for active_event_box
         self.active_event_box.set_margin_start(10)
         self.active_event_box.set_margin_end(10)
         self.active_event_box.set_margin_top(10)
@@ -43,68 +40,46 @@ class Notch(Gtk.Box):
         self.active_event_box.set_vexpand(False)
         self.active_event_box.set_hexpand(False)
         
-        # Setup corners with exact sizing
-        self.left_corner = Corner("top-right")
-        self.left_corner.set_size_request(20, 30)
-        self.left_corner.set_valign(Gtk.Align.START)
-        self.left_corner.set_vexpand(False)
-        self.left_corner.get_style_context().add_class("corner")
-        self.append(self.left_corner)
         
         # Add time label to active event box
         self.time_label = Gtk.Label(label=f"{datetime.datetime.now():%H:%M:%S}")
         self.active_event_box.append(self.time_label)
 
-        # Create a Gtk.Stack and add the dashboard widget as a page
-        self.stack = Gtk.Stack(
-            name="notch-content",
-            transition_type=Gtk.StackTransitionType.OVER_UP,  # Use CROSSFADE for fade effect
-            transition_duration=550,  # Set to 0.2s (200ms) for fade transition
-        )
-        self.stack.set_hexpand(True)
-        self.stack.set_vexpand(True)
-        self.stack.set_hhomogeneous(False)  # Allows variable widths
-        self.stack.set_vhomogeneous(False)  # Allows variable heights
-        self.stack.set_interpolate_size(True)  # Enables smooth size transitions
+        # Create an Overlay to manage widgets
+        self.overlay = Gtk.Overlay(name="notch-content")
+        self.overlay.set_hexpand(True)
+        self.overlay.set_vexpand(True)
         
-        # Configure dashboard with margins and expansion
+        # Add widgets directly to the overlay
+        self.overlay.add_overlay(self.active_event_box)
         self.dashboard.set_margin_start(10)
         self.dashboard.set_margin_end(10)
         self.dashboard.set_margin_top(10)
         self.dashboard.set_margin_bottom(10)
         self.dashboard.set_vexpand(False)
         self.dashboard.set_hexpand(False)
+        self.overlay.add_overlay(self.dashboard)
         
-        # Add the various stack pages
-        self.stack.add_named(self.dashboard, 'dashboard')
-        self.stack.add_named(self.active_event_box, 'active-event-box')
-        
-        # Initialize the notification center
         self.notification_center = NotificationCenter(self)
-        
-        # Create a notification stack page
         self.notification_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, name="notification-page")
         self.notification_page.append(self.notification_center.notification_view)
-        # Set margins and expansion for notification_page
         self.notification_page.set_margin_start(10)
         self.notification_page.set_margin_end(10)
         self.notification_page.set_margin_top(10)
         self.notification_page.set_margin_bottom(10)
         self.notification_page.set_vexpand(False)
         self.notification_page.set_hexpand(False)
-        self.stack.add_named(self.notification_page, 'notification')
+        self.overlay.add_overlay(self.notification_page)
         
-        # Default to showing the active event box
-        self.stack.set_visible_child_name('active-event-box')
-        self.append(self.stack)
+        # Set initial visibility and opacity
+        self.active_event_box.set_visible(True)
+        self.active_event_box.set_opacity(1.0)
+        self.dashboard.set_visible(False)
+        self.dashboard.set_opacity(0.0)
+        self.notification_page.set_visible(False)
+        self.notification_page.set_opacity(0.0)
         
-        # Right corner with exact sizing
-        self.right_corner = Corner("top-left")
-        self.right_corner.set_size_request(20, 30)
-        self.right_corner.set_valign(Gtk.Align.START)
-        self.right_corner.set_vexpand(False)
-        self.right_corner.get_style_context().add_class("corner")
-        self.append(self.right_corner)
+        self.append(self.overlay)
         
         # Gesture on the active event box (time display)
         gesture = Gtk.GestureClick()
@@ -130,8 +105,8 @@ class Notch(Gtk.Box):
         self.key_controller.connect("key-pressed", self.on_key_pressed)
         self.add_controller(self.key_controller)
         
-        # Also add to each child widget to ensure we catch events
-        for widget in [self.dashboard, self.notification_page, self.active_event_box, self.stack]:
+        # Add to each child widget to ensure we catch events
+        for widget in [self.dashboard, self.notification_page, self.active_event_box, self.overlay]:
             key_controller = Gtk.EventControllerKey.new()
             key_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
             key_controller.connect("key-pressed", self.on_key_pressed)
@@ -143,12 +118,8 @@ class Notch(Gtk.Box):
         # Add event after initialization to ensure focus
         GLib.timeout_add(100, self.ensure_keyboard_focus)
         
-        # Add variable to track the previous widget
+        # Track the previous widget
         self.previous_widget = 'active-event-box'
-        
-        # Connect signals for debugging size changes
-        self.stack.connect("notify::visible-child", self.on_switch_child)
-        self.stack.connect("notify::allocation", self.on_allocation_changed)
 
     def ensure_keyboard_focus(self):
         """Make sure we have keyboard focus"""
@@ -160,56 +131,90 @@ class Notch(Gtk.Box):
         self.time_label.set_text(f"{datetime.datetime.now():%H:%M:%S}")
         return True  # Continue calling
 
-    def open_notch(self, widget):
-        """
-        Opens the specified widget in the notch, closing any currently active widget first.
+    def transition_to(self, new_widget):
+        """Animate transition to a new widget with scaling and opacity effect"""
+        # Fade out all other widgets
+        for widget in [self.active_event_box, self.dashboard, self.notification_page]:
+            if widget != new_widget and widget.get_visible():
+                widget.set_opacity(0.0)
+                widget.set_visible(False)
+                widget.remove_css_class("expanding")  # Ensure no residual scaling
+
+        # Fade in and scale the new widget
+        new_widget.set_visible(True)
+        new_widget.set_opacity(0.0)
         
-        Parameters:
-        widget (str): Widget to open ('dashboard', 'notification', or 'active-event-box')
-        """
-        current = self.stack.get_visible_child_name()
-        if current == widget:
-            return
-            
-        # Apply blur effect for 0.2 seconds on notch open
-        self.get_style_context().add_class("blur")
-        GLib.timeout_add(150, lambda: self.get_style_context().remove_class("blur") or False)
+        steps = 20
+        step_duration = int(550 / steps)
+        current_step = 0
         
-        if widget == 'notification':
-            print(f"Saving previous widget: {current}")
-            self.previous_widget = current
-        
-        # Close current widget
-        if current == 'dashboard':
-            self.stack.remove_css_class("dashboard")
-            self.dashboard.remove_css_class("open")
-        elif current == 'notification':
-            self.stack.remove_css_class("notification")
-            self.notification_center.notification_view.remove_css_class("open")
-        
-        # Open requested widget
-        if widget == 'dashboard':
-            self.stack.add_css_class("dashboard")
-            self.dashboard.add_css_class("open")
-        elif widget == 'notification':
-            self.stack.add_css_class("notification")
-            self.notification_center.notification_view.add_css_class("open")
-        
-        self.stack.set_visible_child_name(widget)
-        self.stack.queue_resize()  # Force resize after switch
-        
-        # Focus handling
-        if widget == 'dashboard':
-            self.dashboard.grab_focus()
-            for child in self.dashboard:
-                if hasattr(child, 'grab_focus'):
-                    child.grab_focus()
-        elif widget == 'notification':
-            self.notification_page.grab_focus()
-            self.notification_center.notification_view.grab_focus()
-        
+        # Add CSS class to trigger scaling
+        new_widget.add_css_class("expanding")
+
+        def fade_in():
+            nonlocal current_step
+            if current_step < steps:
+                opacity = current_step / steps
+                new_widget.set_opacity(opacity)
+                current_step += 1
+                return True
+            else:
+                new_widget.set_opacity(1.0)
+                # Keep 'expanding' class until explicitly removed in collapse
+                return False
+
+        GLib.timeout_add(10, fade_in)
+
+        # Handle focus
+        new_widget.grab_focus()
         self.grab_focus()
         GLib.timeout_add(50, lambda: self.grab_focus() and False)
+
+    def open_notch(self, widget_name):
+        """Open the specified widget with a transition"""
+        if widget_name == 'dashboard':
+            new_widget = self.dashboard
+            self.previous_widget = self.get_current_widget()
+        elif widget_name == 'notification':
+            new_widget = self.notification_page
+            self.previous_widget = self.get_current_widget()
+        else:
+            new_widget = self.active_event_box
+
+        current = self.get_current_widget()
+        if current == widget_name:
+            print(f"Already on {widget_name}, skipping")
+            return
+            
+        print(f"Opening {widget_name} from {current}")
+        
+        # Apply blur effect for 0.55 seconds on notch open
+        self.overlay.get_style_context().add_class("blur")
+        GLib.timeout_add(200, lambda: self.overlay.get_style_context().remove_class("blur") or False)
+        
+        # Handle CSS classes
+        if widget_name == 'dashboard':
+            self.overlay.add_css_class("dashboard")
+            self.dashboard.add_css_class("open")
+        elif widget_name == 'notification':
+            self.overlay.add_css_class("notification")
+            self.notification_center.notification_view.add_css_class("open")
+        else:
+            self.overlay.remove_css_class("dashboard")
+            self.overlay.remove_css_class("notification")
+            self.dashboard.remove_css_class("open")
+            self.notification_center.notification_view.remove_css_class("open")
+        
+        # Remove classes from previous widget
+        if current == 'dashboard':
+            self.overlay.remove_css_class("dashboard")
+            self.dashboard.remove_css_class("open")
+        elif current == 'notification':
+            self.overlay.remove_css_class("notification")
+            self.notification_center.notification_view.remove_css_class("open")
+        
+        # Perform the transition
+        self.transition_to(new_widget)
 
     def on_active_event_box_click(self, gesture, n_press, x, y):
         """Handle click on the active event box to show dashboard"""
@@ -218,118 +223,95 @@ class Notch(Gtk.Box):
         return True
     
     def show_notification(self):
-        current = self.stack.get_visible_child_name()
+        """Show the notification page and save the current widget"""
+        current = self.get_current_widget()
         if current != 'notification':
             print(f"Before notification, saving current: {current}")
             self.previous_widget = current
         self.open_notch('notification')
     
     def collapse_notch(self):
-        """Collapse the notch back to original size"""
-        current = self.stack.get_visible_child_name()
-        if current == 'dashboard':
-            return False
-            
-        print(f"Collapsing from {current}, previous was {self.previous_widget}")
-        
-        if current == 'notification':
-            self.stack.remove_css_class("notification")
+        """Collapse the notch back to the active event box"""
+        current = self.get_current_widget()
+        if current != 'active-event-box':
+            print(f"Collapsing from {current} to active-event-box")
+            # Ensure all other widgets are reset
+            for widget in [self.dashboard, self.notification_page]:
+                widget.set_visible(False)
+                widget.set_opacity(0.0)
+                widget.remove_css_class("expanding")
+                widget.remove_css_class("open")
+            self.overlay.remove_css_class("dashboard")
+            self.overlay.remove_css_class("notification")
             self.notification_center.notification_view.remove_css_class("open")
-            if self.previous_widget == 'dashboard':
-                self.stack.add_css_class("dashboard")
-                self.dashboard.add_css_class("open")
-            self.stack.set_visible_child_name(self.previous_widget)
-        else:
-            self.stack.remove_css_class("dashboard")
-            self.stack.remove_css_class("notification")
-            self.stack.set_visible_child_name('active-event-box')
-        
-        self.stack.queue_resize()  # Force resize after collapse
-        self.left_corner.set_size_request(20, 30)
-        self.right_corner.set_size_request(20, 30)
-        return False
+            self.transition_to(self.active_event_box)
 
     def on_key_pressed(self, controller, keyval, keycode, state):
         """Handle keypress events, particularly ESC to close the notch"""
         print(f"Key pressed: {keyval}, ESC is {Gdk.KEY_Escape}")
         if keyval == Gdk.KEY_Escape or keyval == 65307:
-            current = self.stack.get_visible_child_name()
+            current = self.get_current_widget()
             print(f"Current widget: {current}")
-            if current == 'dashboard':
-                print("Closing dashboard")
-                self.stack.remove_css_class("dashboard")
-                self.dashboard.remove_css_class("open")
-                self.stack.set_visible_child_name('active-event-box')
-                self.stack.queue_resize()  # Force resize
-                GLib.timeout_add(10, self.collapse_notch)
-                return True
-            elif current == 'notification':
-                print("Closing notification")
+            if current in ('dashboard', 'notification'):
+                print("Closing current widget")
                 self.collapse_notch()
                 return True
         return False
 
-    def on_switch_child(self, stack, pspec):
-        """Debug size changes when visible child switches"""
-        visible_child = stack.get_visible_child()
-        if visible_child:
-            minimum_size, natural_size = visible_child.get_preferred_size()
-            min_width = minimum_size.width
-            min_height = minimum_size.height
-            natural_width = natural_size.width
-            natural_height = natural_size.height
-            classes = stack.get_css_classes()
-            print(f"Visible child: {visible_child.get_name()}, min_size: {min_width}x{min_height}, natural_size: {natural_width}x{natural_height}, Stack classes: {classes}")
+    def get_current_widget(self):
+        """Helper method to get the current visible widget name"""
+        if self.dashboard.get_visible():
+            return 'dashboard'
+        elif self.notification_page.get_visible():
+            return 'notification'
+        else:
+            return 'active-event-box'
 
-    def on_allocation_changed(self, widget, pspec):
-        """Debug stack size allocation"""
-        allocation = widget.get_allocation()
-        print(f"Stack allocated size: {allocation.width}x{allocation.height}")
-
-# CSS remains unchanged as provided
+# Updated CSS with scaling animation
 '''
 #notch {
-    background-color: transparent;
+  background-color: transparent;
 }
 
 #notch-box {
-  margin: 10px;
-  margin-top: 10px;
-  transition: all 0.5s cubic-bezier(0.5, 0.25, 0, 1.25);
+margin: 10px;
+margin-top: 10px;
+transition: all 0.5s cubic-bezier(0.5, 0.25, 0, 1.5);
 }
 
 #notch-content {
-  background-color: black;
-  min-height: 40px;
-  margin-right: -4px;
-  margin-left: -4px;
-  min-width: 256px;
-  border-radius: 0 0 16px 16px;
-  transition: all 0.5s cubic-bezier(0.5, 0.25, 0, 1.25);
+background-color: black;
+min-height: 40px;
+margin-right: -4px;
+margin-left: -4px;
+min-width: 256px;
+border-radius: 0 0 16px 16px;
+transition: all 0.5s cubic-bezier(0.5, 0.25, 0, 1.5);
 }
 
 #notch-content.dashboard {
-  padding: 16px;
-  min-height: 358px;
-  min-width: 820px;
-  border-radius: 0 0 36px 36px;
+padding: 16px;
+min-height: 480px;
+min-width: 820px;
+border-radius: 0 0 36px 36px;
 }
 
 #notch-content.notification {
-  padding: 16px;
-  min-height: 45px;
-  min-width: 360px;
-  border-radius: 0 0 36px 36px;
-  opacity: 1;
+padding: 16px;
+min-height: 100px;
+min-width: 360px;
+border-radius: 0 0 36px 36px;
+opacity: 1;
 }
 
 #dashboard {
-  opacity: 1;
-  margin: 0px;
-  transition: all 0.5s cubic-bezier(0.45, 0.25, 0, 1);
+opacity: 1;
+transform: scale(0.1);
+transition: all 0.45s cubic-bezier(0.45, 0.25, 0, 1);
 }
 
 #dashboard.open {
-  opacity: 1;
+opacity: 1;
+transform: scale(1);
 }
 '''

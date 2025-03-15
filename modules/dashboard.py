@@ -49,7 +49,6 @@ class Dashboard(Gtk.Box):
         return True  # Return True to keep the timer running
 
     def on_back_button_clicked(self, button):
-        # Remove CSS classes from stack and dashboard, then show not active event box.
-        self.notch.stack.remove_css_class("dashboard")
+        # Instead of using self.notch.stack which doesn't exist, collapse the notch.
         self.remove_css_class("open")
-        self.notch.stack.set_visible_child_name('active-event-box')
+        self.notch.collapse_notch()

@@ -43,7 +43,7 @@ class Bar(Gtk.ApplicationWindow):
         LayerShell.set_margin(self, LayerShell.Edge.TOP, 0)  # Ensure no gap at the top
         
         # Set height and exclusive zone to 30px
-        bar_height = 30
+        bar_height = 40
         # Add 10px for the margins (5px top + 5px bottom)
         LayerShell.set_exclusive_zone(self, bar_height + 10)
         

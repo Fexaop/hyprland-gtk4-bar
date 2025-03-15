@@ -76,7 +76,7 @@ def on_activate(app):
     LayerShell.set_anchor(notch_window, LayerShell.Edge.RIGHT, False)
     LayerShell.set_margin(notch_window, LayerShell.Edge.LEFT, 0)
     LayerShell.set_margin(notch_window, LayerShell.Edge.RIGHT, 0)
-    LayerShell.set_margin(notch_window, LayerShell.Edge.TOP, -52)  # Reduced negative margin
+    LayerShell.set_margin(notch_window, LayerShell.Edge.TOP, -55)  # Reduced negative margin
 
     # Create a box for the notch
     center_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
@@ -91,7 +91,7 @@ def on_activate(app):
     notch_window.set_child(center_box)
     
     # Set notch size - only specifying height, letting width adjust to content
-    bar_height = 40  # Reduced from 45px to 30px
+    bar_height = 50  # Reduced from 45px to 30px
     notch_window.set_size_request(-1, bar_height)  # Auto width, fixed height
     
     # The next step is to center the window on screen

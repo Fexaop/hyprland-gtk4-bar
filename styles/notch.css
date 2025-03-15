@@ -3,42 +3,48 @@
 }
 
 #notch-box {
-margin: 10px;
-margin-top: 10px;
-transition: all 0.5s cubic-bezier(0.5, 0.25, 0, 1.5);
+    margin: 10px;
+    transition: all 0.35s cubic-bezier(0.5, 0.25, 0, 1);
 }
 
 #notch-content {
-background-color: black;
-min-height: 40px;
-margin-right: -4px;
-margin-left: -4px;
-min-width: 256px;
-border-radius: 0 0 16px 16px;
-transition: all 0.5s cubic-bezier(0.5, 0.25, 0, 1.5);
+    background-color: #000000;
+    min-height: 40px;
+    margin-right: -4px;
+    margin-left: -4px;
+    min-width: 256px;
+    border-radius: 16px;
+    transition: all 0.35s cubic-bezier(0.5, 0.25, 0, 1);
+}
+
+#notch-content.expanding {
+    transform-origin: top center;
 }
 
 #notch-content.dashboard {
-padding: 16px;
-min-height: 358px;
-min-width: 820px;
-border-radius: 0 0 36px 36px;
+    padding: 16px;
+    min-height: 480px;
+    min-width: 820px;
+    border-radius: 36px;
 }
 
 #notch-content.notification {
-padding: 16px;
-min-height: 45px;
-min-width: 360px;
-border-radius: 0 0 36px 36px;
-opacity: 1;
+    padding: 16px;
+    min-height: 100px;
+    min-width: 360px;
+    border-radius: 36px;
+}
+
+.expanding {
+    transform-origin: center;
+    transition: all 0.5s ease-in-out;
 }
 
 #dashboard {
-opacity: 0;
-margin: 0px;
-transition: all 0.2s cubic-bezier(0.45, 0.25, 0, 1);
+    opacity: 1;
 }
 
 #dashboard.open {
-opacity: 1;
+    opacity: 1;
 }
+
