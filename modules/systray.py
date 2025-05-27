@@ -30,8 +30,14 @@ def setup_css():
 
 class SysTray(Gtk.Box):
     def __init__(self) -> None:
-        super().__init__(spacing=5)  # No spacing between icons
+        super().__init__(spacing=0)  # Outer box has no spacing
         self.set_css_classes(["SysTray"])
+
+        # Create the inner content box
+        self.content_box = Gtk.Box(spacing=5)  # Inner box handles spacing
+        self.content_box.set_css_classes(["systemtray-content"])
+        self.append(self.content_box)
+
         self.items = {}
         self.current_popover = None
         self.switch_pending = False  # Flag to track menu switching
@@ -227,13 +233,13 @@ class SysTray(Gtk.Box):
         btn.add_controller(click_gesture)
 
         btn.set_child(icon)
-        self.append(btn)
+        self.content_box.append(btn)  # Append to content_box
         self.items[id] = btn
 
     def remove_item(self, _: Tray.Tray, id: str):
         if id in self.items:
             btn = self.items[id]
-            self.remove(btn)
+            self.content_box.remove(btn)  # Remove from content_box
             del self.items[id]
     
     def _activate_tray_item(self, item):

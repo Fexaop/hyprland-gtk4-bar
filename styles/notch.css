@@ -1,50 +1,124 @@
-#notch {
+#notch{
   background-color: transparent;
+  margin-top: 0px;
+  min-height: 40px;
 }
 
 #notch-box {
-    margin: 10px;
-    transition: all 0.35s cubic-bezier(0.5, 0.25, 0, 1);
+  transition: all 0.5s cubic-bezier(0.5, 0.25, 0, 1);
+  min-height: 40px;
 }
-
+#active-event-box{
+  transition: all 0.25s cubic-bezier(0.5, 0.25, 0, 1);
+  min-height: 40px;
+  min-width: 300px;
+}
+#notch-content.music{
+  min-height: 250px;
+  min-width: 420px;
+  border-radius: 0 0 16px 16px;
+}
 #notch-content {
-    background-color: #000000;
-    min-height: 40px;
-    margin-right: -4px;
-    margin-left: -4px;
-    min-width: 256px;
-    border-radius: 16px;
-    transition: all 0.35s cubic-bezier(0.5, 0.25, 0, 1);
-}
-
-#notch-content.expanding {
-    transform-origin: top center;
+  background-color: black;
+  min-height: 40px;
+  min-width: 300px;
+  margin-right: 19px;
+  margin-left: 19px;
+  border-radius: 0 0 16px 16px;
+  transition: all 0.5s cubic-bezier(0.5, 0.25, 0, 1);
 }
 
 #notch-content.dashboard {
-    padding: 16px;
-    min-height: 480px;
-    min-width: 820px;
-    border-radius: 36px;
+  min-height: 358px;
+  min-width: 820px;
+  border-radius: 0 0 16px 16px;
+}
+
+#notch-content.osd {
+  min-height: 67px;
+  min-width: 344px;
+  border-radius: 0 0 16px 16px;
+
 }
 
 #notch-content.notification {
-    padding: 16px;
-    min-height: 100px;
-    min-width: 360px;
-    border-radius: 36px;
-}
-
-.expanding {
-    transform-origin: center;
-    transition: all 0.5s ease-in-out;
+  padding: 16px;
+  min-height: 75px;
+  min-width: 385px;
+  border-radius: 0 0 16px 16px;
+  opacity: 1;
 }
 
 #dashboard {
-    opacity: 1;
+ opacity: 1;
+ margin: -800px;
+ transition: all 0.5s cubic-bezier(0.5, 0.25, 0, 1);
+ border-radius: 16px;
+ padding: 10px;
 }
-
+#music-player {
+  padding: 10px;
+  opacity: 1;
+  margin: -800px;
+  transition: all 0.5s cubic-bezier(0.5, 0.25, 0, 1);
+}
+#music-player.open {
+  opacity: 1;
+  margin: 0px;
+}
 #dashboard.open {
-    opacity: 1;
+  opacity: 1;
+  margin: 0px;
+}
+#osd {
+  opacity: 1;
+  margin: -800px;
+  transition: all 0.5s cubic-bezier(0.5, 0.25, 0, 1);
+}
+#osd.open {
+  opacity: 1;
+  margin: 0px;
+}
+#osd slider {
+  background-color: white;
+  border-radius: 8px;
 }
 
+#osd button {
+  opacity: 0;
+}
+#brightness-box, #volume-box, #music-progress-bar {
+    background-color: rgb(45, 45, 45);
+    min-height: 5px;
+    border-radius: 32px;
+    overflow: hidden;
+}
+#brightness-box-inner, #volume-box-inner, #music-progress-bar-inner {
+    background-color: white;
+    min-height: 5px;
+    border-radius: 32px;
+}
+
+.player-icon {
+    background-color: black;
+    color: white;
+    border: none;
+    padding: 0;
+    margin: 0;
+    min-width: 32px;
+    min-height: 32px;
+}
+
+.player-icon-label {
+    font-size: 16px; /* Smaller font size for subtlety */
+    text-align: center;
+}
+
+.player-icon:hover {
+    opacity: 0.7; /* Subtle hover effect */
+}
+
+.active {
+    background-color: white;
+    color: black;
+}

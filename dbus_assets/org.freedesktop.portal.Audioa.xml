@@ -1,0 +1,23 @@
+
+<node>
+  <interface name="org.freedesktop.portal.Audio">
+    <method name="Mute">
+      <arg direction="in" type="b" name="mute"/>
+    </method>
+    <method name="GetMute">
+      <arg direction="out" type="b" name="mute"/>
+    </method>
+    <method name="SetVolume">
+      <arg direction="in" type="d" name="volume"/>
+    </method>
+    <method name="GetVolume">
+      <arg direction="out" type="d" name="volume"/>
+    </method>
+    <signal name="MuteChanged">
+      <arg type="b" name="mute"/>
+    </signal>
+    <signal name="VolumeChanged">
+      <arg type="d" name="volume"/>
+    </signal>
+  </interface>
+</node>

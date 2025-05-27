@@ -1,7 +1,6 @@
 import gi
 gi.require_version('Gtk', '4.0')
 from gi.repository import Gtk, GLib, Gdk, Gio
-from modules.music import MusicPlayer
 import datetime
 
 class Dashboard(Gtk.Box):
@@ -32,10 +31,6 @@ class Dashboard(Gtk.Box):
         calendar = Gtk.Calendar(name="calendar")
         right_side.append(calendar)
         
-        # Import and add the music player
-        music_player = MusicPlayer()
-        right_side.append(music_player)
-        
         # Add right side to expanded box
         expanded_box.append(right_side)
         
@@ -49,6 +44,5 @@ class Dashboard(Gtk.Box):
         return True  # Return True to keep the timer running
 
     def on_back_button_clicked(self, button):
-        # Instead of using self.notch.stack which doesn't exist, collapse the notch.
-        self.remove_css_class("open")
+        # Remove CSS classes from stack and dashboard, then show not active event box.
         self.notch.collapse_notch()

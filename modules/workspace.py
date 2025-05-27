@@ -55,7 +55,7 @@ class WorkspaceIndicator(Gtk.Box):
         self.frame = None
         self.animation_source_id = None
         self.animation_start_time = 0
-        self.animation_duration = 500  # ms
+        self.animation_duration = 400  # ms
         self.animation_start_position = 50  # px
         self.animation_target_position = 50  # px
         self.animation_current_position = 50  # px
@@ -66,7 +66,7 @@ class WorkspaceIndicator(Gtk.Box):
         self.PHASE_FINALIZE = 1
         self.animation_phase = self.PHASE_MOVE_GRADIENT_AND_ADJUST_MARGINS
         self.animation_active = False
-        self.phase_durations = [350, 150]  # ms per phase
+        self.phase_durations = [300, 100]  # ms per phase
         self.phase_start_times = [0, 0]
         
         # Margin animation
@@ -81,6 +81,7 @@ class WorkspaceIndicator(Gtk.Box):
         self.css_provider = Gtk.CssProvider()
         self.gradient_button_id = None
         self.gradient_width_at_phase_change = self.normal_gradient_half_width
+        self.phase_finalize_start_position = 0  # Initialize here
         self.previous_workspace = None
         self.is_first_realization = True
         
@@ -213,11 +214,11 @@ class WorkspaceIndicator(Gtk.Box):
                         button.set_margin_start(self.margin_target_value)
                         button.set_margin_end(self.margin_target_value)
                     elif has_windows:
-                        button.set_label(str(i))
                         button.add_css_class("has-windows")
+                        button.set_label(str(i))
                     else:
-                        button.set_label("•")
                         button.add_css_class("empty")
+                        button.set_label("•")
                 GLib.timeout_add(50, self.update_initial_gradient_position)
                 self.previous_workspace = active_id
                 return
@@ -245,7 +246,22 @@ class WorkspaceIndicator(Gtk.Box):
         if self.previous_workspace != active_id:
             self.previous_workspace = active_id
             GLib.timeout_add(20, self.start_animation_sequence, active_id)
-    
+    def calculate_final_gradient_position(self, active_id):
+        """Calculate the final gradient position after margins are applied."""
+        if active_id not in self.workspace_buttons:
+            return 0
+        active_button = self.workspace_buttons[active_id]
+        sum_prev_widths = 0
+        current = self.inner_box.get_first_child()
+        while current and current != active_button:
+            allocation = current.get_allocation()
+            if allocation:
+                sum_prev_widths += allocation.width
+            current = current.get_next_sibling()
+        final_x = sum_prev_widths + self.margin_target_value
+        active_width = active_button.get_allocation().width if active_button.get_allocation() else 0
+        final_center = final_x + active_width / 2
+        return final_center
     def start_animation_sequence(self, active_id):
         """Start multi-phase animation for workspace transition."""
         if self.frame and active_id:
@@ -257,7 +273,8 @@ class WorkspaceIndicator(Gtk.Box):
                 self.animation_active = True
                 self.animation_start_time = GLib.get_monotonic_time()
                 self.animation_start_position = self.animation_current_position
-                self.animation_target_position = self.calculate_gradient_position(active_id)
+                # Use final position instead of current position
+                self.animation_target_position = self.calculate_final_gradient_position(active_id)
                 self.current_active_button = new_active_button
                 
                 self.animated_prev_buttons = [
@@ -288,15 +305,31 @@ class WorkspaceIndicator(Gtk.Box):
             self.finish_animation()
             return False
 
+        # Check for phase transition *before* calculating progress for the current phase
         if self.animation_phase == self.PHASE_MOVE_GRADIENT_AND_ADJUST_MARGINS and elapsed_total >= self.phase_start_times[1]:
+            # Store state *at the end* of phase 1
+            self.phase_finalize_start_position = self.animation_current_position
+            # Calculate the width at the exact end of phase 1 (progress = 1.0)
+            distance = abs(self.animation_target_position - self.animation_start_position)
+            peak_width = self.normal_gradient_half_width + 0.4 * distance
+            # Width calculation at the end of phase 1 (progress = 1.0)
+            self.gradient_width_at_phase_change = peak_width - (peak_width - self.normal_gradient_half_width) * ((1.0 - 0.5) / 0.5)
+            
             self.animation_phase = self.PHASE_FINALIZE
-        
-        phase_start_time = self.phase_start_times[self.animation_phase]
-        phase_duration = self.phase_durations[self.animation_phase]
-        phase_elapsed = elapsed_total - phase_start_time
-        phase_progress = min(phase_elapsed / phase_duration, 1.0)
-        eased_progress = 0.5 * (1 - math.cos(math.pi * phase_progress))
-        
+            # Recalculate phase elapsed and progress for the new phase
+            phase_start_time = self.phase_start_times[self.animation_phase]
+            phase_duration = self.phase_durations[self.animation_phase]
+            phase_elapsed = elapsed_total - phase_start_time
+            phase_progress = min(phase_elapsed / phase_duration, 1.0)
+            eased_progress = 0.5 * (1 - math.cos(math.pi * phase_progress))
+        else:
+            # Calculate progress normally if no phase transition
+            phase_start_time = self.phase_start_times[self.animation_phase]
+            phase_duration = self.phase_durations[self.animation_phase]
+            phase_elapsed = elapsed_total - phase_start_time
+            phase_progress = min(phase_elapsed / phase_duration, 1.0)
+            eased_progress = 0.5 * (1 - math.cos(math.pi * phase_progress))
+
         if self.animation_phase == self.PHASE_MOVE_GRADIENT_AND_ADJUST_MARGINS:
             self.animation_current_position = (
                 self.animation_start_position +
@@ -326,12 +359,16 @@ class WorkspaceIndicator(Gtk.Box):
                 self.current_active_button.set_margin_start(new_margin_active)
                 self.current_active_button.set_margin_end(new_margin_active)
                 self.current_active_button.set_label(str(self.current_active_button.workspace_id))
-        
+                
         elif self.animation_phase == self.PHASE_FINALIZE:
             if self.current_active_button and self.current_active_button.get_realized():
                 allocation = self.current_active_button.get_allocation()
                 btn_center = allocation.x + (allocation.width / 2)
-                self.animation_current_position = self.animation_current_position * 0.7 + btn_center * 0.3
+                # Smooth interpolation from the position at the start of this phase
+                self.animation_current_position = (
+                    self.phase_finalize_start_position +
+                    (btn_center - self.phase_finalize_start_position) * eased_progress
+                )
                 final_margin = int(round(self.margin_target_value))
                 self.current_active_button.set_margin_start(final_margin)
                 self.current_active_button.set_margin_end(final_margin)
@@ -406,12 +443,9 @@ class WorkspaceBar(Gtk.Box):
         
         # Frame for workspace indicator
         frame = Gtk.Frame(name="workspace-frame")
-        frame.set_margin_start(2)
-        frame.set_margin_end(2)
-        frame.set_margin_top(2)
-        frame.set_margin_bottom(2)
         frame.set_valign(Gtk.Align.CENTER)
-        
+        frame.vexpand = True
+        frame.set_size_request(-1, 40)
         # Add workspace indicator
         self.workspace_indicator = WorkspaceIndicator()
         self.workspace_indicator.frame = frame
@@ -434,10 +468,6 @@ if __name__ == "__main__":
         window = Gtk.ApplicationWindow(application=app, title="Workspace Test")
         window.set_default_size(600, 100)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        box.set_margin_start(10)
-        box.set_margin_end(10)
-        box.set_margin_top(10)
-        box.set_margin_bottom(10)
         workspace_bar = WorkspaceBar()
         box.append(workspace_bar)
         window.set_child(box)

@@ -1,0 +1,20 @@
+<node>
+    <interface name="org.freedesktop.WirePlumber">
+        <method name="ListDevices">
+            <arg direction="out" type="a{sv}" name="devices"/>
+        </method>
+        <method name="SetDefaultDevice">
+            <arg direction="in" type="u" name="device_id"/>
+        </method>
+        <method name="GetDeviceInfo">
+            <arg direction="in" type="u" name="device_id"/>
+            <arg direction="out" type="a{sv}" name="device_info"/>
+        </method>
+        <signal name="DeviceAdded">
+            <arg type="u" name="device_id"/>
+        </signal>
+        <signal name="DeviceRemoved">
+            <arg type="u" name="device_id"/>
+        </signal>
+    </interface>
+</node>

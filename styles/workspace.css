@@ -1,6 +1,6 @@
 /* Workspace button styling */
 .workspace-button {
-    border-radius: 3px;
+    border-radius: 16px;
     font-weight: bold;
     font-size: 10px;
     padding: 0px;  /* Remove button padding */
@@ -11,15 +11,17 @@
     min-height: 0;
 }
 
+#workspace-bar {
+  padding: 0px;
+}
 /* Empty workspace styling - smaller dot */
 .workspace-button.empty {
     color: #555555;
-    font-size: 14px;  /* Make dot larger */
-    padding-bottom: 2px; /* Adjust vertical position of the dot */
+    font-size: 10px;  /* Make dot larger */
 }
 
 .workspace-button.has-windows {
-    color: #F5F5F580;
+    color: #f5f5f5a8;
 }
 
 /* Button directly under gradient should have black text */
@@ -44,16 +46,16 @@
 /* Panel styling */
 .panel {
     background-color: transparent;
-    border-radius: 4px;
-    padding: 2px;
+    border-radius: 0 0 16px 0;
 }
 
 /* Style for the workspace frame - now just a container */
 #workspace-frame {
-    padding: 5px;
     background-color: black;
+    border-radius: 0 0 16px 0;
+    border-color: black;
+    margin-right: -1px;
 }
-
 /* Style for the inner box with gradient */
 #workspace-inner-box {
     --box-position: 50px; /* Initial position value in pixels - will be updated dynamically */
@@ -81,6 +83,7 @@
       calc(var(--box-position) - 9px - 20px) center,
       calc(var(--box-position) - 9px - 1px) center,
       calc(var(--box-position) - 9px + var(--gradient-half-width)) center;
-    padding: 2px;
-    border-radius: 3px;
+    margin: 5px;
+    border-radius: 0 0 16px 0;
+
 }
