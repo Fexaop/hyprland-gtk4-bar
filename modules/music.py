@@ -5,6 +5,7 @@ import tempfile
 from service.mpris import MprisPlayerManager, MprisPlayer
 from widgets.progressbar import CustomProgressBar
 import modules.icons as icons
+
 class MusicPlayer(Gtk.Box):
     def __init__(self):
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
@@ -109,21 +110,45 @@ class MusicPlayer(Gtk.Box):
         controls_box.set_halign(Gtk.Align.CENTER)
         controls_box.set_margin_top(5)
         
-        self.previous_button = Gtk.Button(label="⏮")
-        self.previous_button.set_name("control-button")
-        self.previous_button.connect("clicked", self.on_previous_clicked)
+        # Previous control
+        self.previous_box = Gtk.Box()
+        self.previous_box.set_name("control-box")
+        self.previous_box.set_size_request(40, 40)
+        previous_label = Gtk.Label()
+        previous_label.set_markup(icons.prev)
+        previous_label.add_css_class("control-icon")
+        self.previous_box.append(previous_label)
+        previous_gesture = Gtk.GestureClick()
+        previous_gesture.connect("pressed", self.on_previous_clicked)
+        self.previous_box.add_controller(previous_gesture)
         
-        self.play_pause_button = Gtk.Button(label="▶")
-        self.play_pause_button.set_name("play-pause-button")
-        self.play_pause_button.connect("clicked", self.on_play_pause_clicked)
+        # Play/Pause control
+        self.play_pause_box = Gtk.Box()
+        self.play_pause_box.set_name("play-pause-box")
+        self.play_pause_box.set_size_request(40, 40)
+        self.play_pause_label = Gtk.Label()
+        self.play_pause_label.set_markup(icons.play)
+        self.play_pause_label.add_css_class("control-icon")
+        self.play_pause_box.append(self.play_pause_label)
+        play_pause_gesture = Gtk.GestureClick()
+        play_pause_gesture.connect("pressed", self.on_play_pause_clicked)
+        self.play_pause_box.add_controller(play_pause_gesture)
         
-        self.next_button = Gtk.Button(label="⏭")
-        self.next_button.set_name("control-button")
-        self.next_button.connect("clicked", self.on_next_clicked)
+        # Next control
+        self.next_box = Gtk.Box()
+        self.next_box.set_name("control-box")
+        self.next_box.set_size_request(40, 40)
+        next_label = Gtk.Label()
+        next_label.set_markup(icons.next)
+        self.next_box.append(next_label)
+        next_label.add_css_class("control-icon")
+        next_gesture = Gtk.GestureClick()
+        next_gesture.connect("pressed", self.on_next_clicked)
+        self.next_box.add_controller(next_gesture)
         
-        controls_box.append(self.previous_button)
-        controls_box.append(self.play_pause_button)
-        controls_box.append(self.next_button)
+        controls_box.append(self.previous_box)
+        controls_box.append(self.play_pause_box)
+        controls_box.append(self.next_box)
         self.main_box.append(controls_box)
         
         self.stack.add_titled(self.main_box, "player", "Player")
@@ -143,11 +168,11 @@ class MusicPlayer(Gtk.Box):
         """Return a tuple of (active_icon, inactive_icon) for the player."""
         name = player_name.lower()
         if "spotify" in name:
-            return (icons.spotify, icons.spotify_off)  # brand-spotify, brand-spotify-filled
+            return (icons.spotify, icons.spotify_off)
         elif "firefox" in name:
-            return (icons.firefox, icons.firefox_off)  # brand-firefox, browser-off (fallback)
+            return (icons.firefox, icons.firefox_off)
         else:
-            return (icons.disc, icons.disc_off)  # music, music-off
+            return (icons.disc, icons.disc_off)
 
     def create_switcher_button(self, player_name):
         """Create a button with a centered Tabler icon using Pango markup, starting with inactive icon."""
@@ -209,7 +234,6 @@ class MusicPlayer(Gtk.Box):
             self.set_active_player(player_name)
             self.stack.set_visible_child_name("player")
         elif self.active_player_name:
-            # Update all icons to ensure only active player has active icon
             self.set_active_player(self.active_player_name)
 
     def set_active_player(self, player_name):
@@ -263,13 +287,24 @@ class MusicPlayer(Gtk.Box):
         self.artist_name_label.set_label(self.artist_name)
         
         if self.playback_status == "playing":
-            self.play_pause_button.set_label("⏸")
+            self.play_pause_label.set_markup(icons.pause)
         else:
-            self.play_pause_button.set_label("▶")
+            self.play_pause_label.set_markup(icons.play)
         
-        self.previous_button.set_sensitive(self.can_go_previous)
-        self.next_button.set_sensitive(self.can_go_next)
-        self.play_pause_button.set_sensitive(self.can_pause)
+        if self.can_go_previous:
+            self.previous_box.get_style_context().remove_class("disabled")
+        else:
+            self.previous_box.get_style_context().add_class("disabled")
+        
+        if self.can_go_next:
+            self.next_box.get_style_context().remove_class("disabled")
+        else:
+            self.next_box.get_style_context().add_class("disabled")
+        
+        if self.can_pause:
+            self.play_pause_box.get_style_context().remove_class("disabled")
+        else:
+            self.play_pause_box.get_style_context().add_class("disabled")
         
         if self.track_image:
             self.update_album_art(self.album_art_image, self.track_image)
@@ -306,16 +341,16 @@ class MusicPlayer(Gtk.Box):
             if self.track_length > 0:
                 self.progress_bar.set_fraction(self.current_position / self.track_length)
 
-    def on_previous_clicked(self, button):
-        if self.active_player:
+    def on_previous_clicked(self, gesture, n_press, x, y):
+        if self.active_player and self.can_go_previous:
             self.active_player.previous()
 
-    def on_play_pause_clicked(self, button):
-        if self.active_player:
+    def on_play_pause_clicked(self, gesture, n_press, x, y):
+        if self.active_player and self.can_pause:
             self.active_player.play_pause()
 
-    def on_next_clicked(self, button):
-        if self.active_player:
+    def on_next_clicked(self, gesture, n_press, x, y):
+        if self.active_player and self.can_go_next:
             self.active_player.next()
 
     def update_album_art(self, image_widget, url):
