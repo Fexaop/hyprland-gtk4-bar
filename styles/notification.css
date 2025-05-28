@@ -43,11 +43,16 @@
 
 /* Close button styling */
 #notification-close-button {
-  font-size: 32px;
-  border-radius: 4px;
-  background-color: transparent;
+  font-size: 18px;
+  font-weight: bold;
+  border-radius: 36px;
+  padding: 8px;
+  background-color: rgba(227, 111, 136, 0.268);
   font-weight: thinner;
-  color: white;
+}
+#notification-close-label{
+  color: #E36F88;
+  font-weight: bold;
 }
 
 #notification-close-button:hover {

@@ -4,7 +4,7 @@ import os
 import tempfile
 from service.mpris import MprisPlayerManager, MprisPlayer
 from widgets.progressbar import CustomProgressBar
-
+import modules.icons as icons
 class MusicPlayer(Gtk.Box):
     def __init__(self):
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
@@ -14,7 +14,7 @@ class MusicPlayer(Gtk.Box):
         self.manager.connect("player-appeared", self.on_player_appeared)
         self.manager.connect("player-vanished", self.on_player_vanished)
         
-        self.players = {}
+        self.players = {}  # {player_name: {'mpris_player': MprisPlayer, 'switcher_button': Gtk.Button, 'label': Gtk.Label, 'active_icon': str, 'inactive_icon': str}}
         self.active_player = None
         self.active_player_name = None
         
@@ -30,7 +30,7 @@ class MusicPlayer(Gtk.Box):
         
         self.switcher_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self.switcher_box.set_size_request(32, -1)
-        self.switcher_box.set_valign(Gtk.Align.START)
+        self.switcher_box.set_valign(Gtk.Align.CENTER)
         self.switcher_box.hide()
         self.append(self.switcher_box)
         
@@ -140,27 +140,31 @@ class MusicPlayer(Gtk.Box):
             self.stack.set_visible_child_name("placeholder")
 
     def get_player_icon(self, player_name):
+        """Return a tuple of (active_icon, inactive_icon) for the player."""
         name = player_name.lower()
         if "spotify" in name:
-            return ""
+            return (icons.spotify, icons.spotify_off)  # brand-spotify, brand-spotify-filled
         elif "firefox" in name:
-            return ""
+            return (icons.firefox, icons.firefox_off)  # brand-firefox, browser-off (fallback)
         else:
-            return ""
+            return (icons.disc, icons.disc_off)  # music, music-off
 
     def create_switcher_button(self, player_name):
-        icon = self.get_player_icon(player_name)
-        label = Gtk.Label(label=icon)
+        """Create a button with a centered Tabler icon using Pango markup, starting with inactive icon."""
+        active_icon, inactive_icon = self.get_player_icon(player_name)
+        markup = f'<span font-family="Tabler Icons" font-weight="normal" font-size="16pt">{inactive_icon}</span>'
+        label = Gtk.Label()
+        label.set_markup(markup)
         label.set_halign(Gtk.Align.CENTER)
         label.set_valign(Gtk.Align.CENTER)
-        label.get_style_context().add_class("player-icon-label")
         
         button = Gtk.Button()
         button.set_child(label)
         button.set_size_request(32, 32)
         button.get_style_context().add_class("player-icon")
         button.connect("clicked", self.on_switcher_clicked, player_name)
-        return button
+        
+        return button, label, active_icon, inactive_icon
 
     def on_switcher_clicked(self, button, player_name):
         if player_name in self.players:
@@ -187,10 +191,13 @@ class MusicPlayer(Gtk.Box):
         mpris_player = MprisPlayer(player)
         player_name = mpris_player.player_name
         
-        switcher_button = self.create_switcher_button(player_name)
+        switcher_button, label, active_icon, inactive_icon = self.create_switcher_button(player_name)
         self.players[player_name] = {
             'mpris_player': mpris_player,
-            'switcher_button': switcher_button
+            'switcher_button': switcher_button,
+            'label': label,
+            'active_icon': active_icon,
+            'inactive_icon': inactive_icon
         }
         self.switcher_box.append(switcher_button)
         
@@ -201,6 +208,9 @@ class MusicPlayer(Gtk.Box):
             self.switcher_box.show()
             self.set_active_player(player_name)
             self.stack.set_visible_child_name("player")
+        elif self.active_player_name:
+            # Update all icons to ensure only active player has active icon
+            self.set_active_player(self.active_player_name)
 
     def set_active_player(self, player_name):
         self.active_player_name = player_name
@@ -208,11 +218,10 @@ class MusicPlayer(Gtk.Box):
         self.update_player_data()
         self.update_ui()
         for p_name, p_data in self.players.items():
-            button = p_data['switcher_button']
-            if p_name == self.active_player_name:
-                button.get_style_context().add_class("active")
-            else:
-                button.get_style_context().remove_class("active")
+            label = p_data['label']
+            icon = p_data['active_icon'] if p_name == self.active_player_name else p_data['inactive_icon']
+            markup = f'<span font-family="Tabler Icons" font-weight="normal" font-size="16pt">{icon}</span>'
+            label.set_markup(markup)
 
     def update_player_data(self):
         if not self.active_player:

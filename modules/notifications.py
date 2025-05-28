@@ -4,7 +4,7 @@ gi.require_version('Pango', '1.0')
 from gi.repository import Gtk, GLib, GdkPixbuf, Gdk, Pango
 import os
 from service.notification import Notifications, Notification
-
+import modules.icons as icons
 class NotificationStack(Gtk.Box):
     def __init__(self):
         super().__init__(
@@ -123,15 +123,20 @@ class NotificationView(Gtk.Box):
             orientation=Gtk.Orientation.VERTICAL,
             name="notification-close-box"
         )
-        close_box.set_valign(Gtk.Align.CENTER)
+        close_box.set_valign(Gtk.Align.START)
         close_box.set_halign(Gtk.Align.END)
         
-        close_button = Gtk.Button(label="×", name="notification-close-button")
-        close_button.set_halign(Gtk.Align.CENTER)
-        close_button.connect("clicked", self.on_close_clicked)
+        close_button = Gtk.Box(name="notification-close-button")
+        close_label = Gtk.Label(name="notification-close-label")
+        close_label.set_markup(f"<span font-family='tabler-icons' font-weight='bold'>&#xeb55;</span>")
+        close_button.append(close_label)
+        close_button.set_valign(Gtk.Align.START)
+        gesture = Gtk.GestureClick()
+        gesture.connect("pressed", self.on_close_clicked)
+        close_button.add_controller(gesture)
         close_button.get_style_context().add_class("circular")
         
-        #close_box.append(close_button)
+        close_box.append(close_button)
         
         page.append(image)
         page.append(text_box)
@@ -191,7 +196,7 @@ class NotificationView(Gtk.Box):
             except:
                 image_widget.set_visible(False)
 
-    def on_close_clicked(self, button):
+    def on_close_clicked(self, button, n_press, x, y):
         self.notification_center.hide_notification()
         return True
 
@@ -317,7 +322,6 @@ class NotificationCenter:
                 
             if self.notification_queue:
                 GLib.timeout_add(500, self.show_next_notification)
-                
         return False
     
     def on_notification_hover(self):

@@ -198,6 +198,7 @@ class Notch(Gtk.Overlay):
             if current == 'notification':
                 self.stack.remove_css_class("notification")
                 self.notification_center.notification_view.remove_css_class("open")
+                self.notification_center.is_showing = False
             elif current == 'osd':
                 self.stack.remove_css_class("osd")
                 self.osd.remove_css_class("open")

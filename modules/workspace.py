@@ -36,20 +36,6 @@ class WorkspaceIndicator(Gtk.Box):
         
         # Workspace buttons dictionary
         self.workspace_buttons = {}
-        self.setup_workspace_indicators()
-        
-        # Connect Hyprland signals
-        self.hyprland.connect("workspaces-changed", self.update_workspaces)
-        self.hyprland.connect("active-workspace-changed", self.update_workspaces)
-        
-        # Scroll controller for workspace switching
-        scroll_controller = Gtk.EventControllerScroll()
-        scroll_controller.set_flags(
-            Gtk.EventControllerScrollFlags.VERTICAL | 
-            Gtk.EventControllerScrollFlags.HORIZONTAL
-        )
-        scroll_controller.connect("scroll", self.on_scroll)
-        self.add_controller(scroll_controller)
         
         # Animation variables
         self.frame = None
@@ -81,19 +67,49 @@ class WorkspaceIndicator(Gtk.Box):
         self.css_provider = Gtk.CssProvider()
         self.gradient_button_id = None
         self.gradient_width_at_phase_change = self.normal_gradient_half_width
-        self.phase_finalize_start_position = 0  # Initialize here
+        self.phase_finalize_start_position = 0
         self.previous_workspace = None
-        self.is_first_realization = True
+        self.is_initialized = False
         
         # Focus controller
         controller = Gtk.EventControllerFocus.new()
         self.add_controller(controller)
         
-        # Map event for initial gradient positioning
-        self.connect("map", self.on_map_event)
+        # Scroll controller for workspace switching
+        scroll_controller = Gtk.EventControllerScroll()
+        scroll_controller.set_flags(
+            Gtk.EventControllerScrollFlags.VERTICAL | 
+            Gtk.EventControllerScrollFlags.HORIZONTAL
+        )
+        scroll_controller.connect("scroll", self.on_scroll)
+        self.add_controller(scroll_controller)
         
-        # Initial update
-        self.update_workspaces()
+        # Initialize workspaces and positioning
+        self.initialize_workspaces()
+        
+        # Connect Hyprland signals after initialization
+        self.hyprland.connect("workspaces-changed", self.update_workspaces)
+        self.hyprland.connect("active-workspace-changed", self.update_workspaces)
+        
+        # Map event for ensuring proper initialization
+        self.connect("map", self.on_map_event)
+        self.connect("realize", self.on_realize_event)
+    
+    def initialize_workspaces(self):
+        """Initialize workspaces based on current Hyprland state."""
+        # Get current active workspace to determine initial range
+        active_workspace = self.hyprland.get_active_workspace()
+        active_id = active_workspace.get("id") if active_workspace else 1
+        
+        # Set current range based on active workspace
+        self.current_range = self.get_workspace_range(active_id)
+        self.previous_workspace = active_id
+        
+        # Setup workspace indicators
+        self.setup_workspace_indicators()
+        
+        # Update workspace states
+        self.update_workspace_states()
     
     def get_workspace_range(self, workspace_id):
         """Determine the range (start, end) for a given workspace ID."""
@@ -117,6 +133,7 @@ class WorkspaceIndicator(Gtk.Box):
     
     def setup_workspace_indicators(self):
         """Create buttons for the current range of workspaces."""
+        # Clear existing buttons
         child = self.inner_box.get_first_child()
         while child:
             next_child = child.get_next_sibling()
@@ -134,6 +151,40 @@ class WorkspaceIndicator(Gtk.Box):
             button.connect("clicked", self.on_workspace_clicked, i)
             self.inner_box.append(button)
             self.workspace_buttons[i] = button
+    
+    def update_workspace_states(self):
+        """Update workspace button states without animations."""
+        workspaces = self.hyprland.get_workspaces()
+        active_workspace = self.hyprland.get_active_workspace()
+        active_id = active_workspace.get("id") if active_workspace else None
+        
+        workspace_dict = {ws.get("id"): ws.get("windows", 0) for ws in workspaces}
+        
+        for i, button in self.workspace_buttons.items():
+            # Clear all classes
+            button.remove_css_class("active")
+            button.remove_css_class("empty")
+            button.remove_css_class("has-windows")
+            button.remove_css_class("under-gradient")
+            
+            # Reset margins
+            button.set_margin_start(0)
+            button.set_margin_end(0)
+            
+            has_windows = workspace_dict.get(i, 0) > 0
+            
+            if i == active_id:
+                button.set_label(str(i))
+                button.add_css_class("active")
+                button.set_margin_start(self.margin_target_value)
+                button.set_margin_end(self.margin_target_value)
+                self.current_active_button = button
+            elif has_windows:
+                button.set_label(str(i))
+                button.add_css_class("has-windows")
+            else:
+                button.set_label("•")
+                button.add_css_class("empty")
     
     def calculate_gradient_position(self, active_id):
         """Calculate gradient position in pixels based on active workspace."""
@@ -158,11 +209,12 @@ class WorkspaceIndicator(Gtk.Box):
         """
         self.css_provider.load_from_data(css.encode())
         display = self.get_display()
-        Gtk.StyleContext.add_provider_for_display(
-            display,
-            self.css_provider,
-            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-        )
+        if display:
+            Gtk.StyleContext.add_provider_for_display(
+                display,
+                self.css_provider,
+                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            )
         self.update_button_colors(position)
     
     def update_button_colors(self, position):
@@ -189,6 +241,41 @@ class WorkspaceIndicator(Gtk.Box):
                 if x_gradient_start <= button_center_x <= x_gradient_end:
                     button.add_css_class("under-gradient")
     
+    def ensure_initial_positioning(self):
+        """Ensure the gradient is positioned correctly on the active workspace."""
+        if self.is_initialized:
+            return False
+            
+        active_workspace = self.hyprland.get_active_workspace()
+        active_id = active_workspace.get("id") if active_workspace else None
+        
+        if active_id and active_id in self.workspace_buttons:
+            button = self.workspace_buttons[active_id]
+            if button.get_realized() and button.get_allocation():
+                allocation = button.get_allocation()
+                if allocation.width > 0 and allocation.height > 0:
+                    center_x = allocation.x + (allocation.width / 2)
+                    self.animation_current_position = center_x
+                    self.animation_start_position = center_x
+                    self.animation_target_position = center_x
+                    self.set_gradient_position(center_x)
+                    self.is_initialized = True
+                    print(f"Initial gradient positioned at {center_x}px for workspace {active_id}")
+                    return False
+        
+        # If not ready yet, try again
+        return True
+    
+    def on_realize_event(self, widget):
+        """Handle realize event."""
+        GLib.timeout_add(10, self.ensure_initial_positioning)
+        return False
+    
+    def on_map_event(self, widget):
+        """Handle map event for initial gradient positioning."""
+        GLib.timeout_add(50, self.ensure_initial_positioning)
+        return False
+    
     def update_workspaces(self, *args):
         """Update workspace indicators based on Hyprland state."""
         workspaces = self.hyprland.get_workspaces()
@@ -196,34 +283,19 @@ class WorkspaceIndicator(Gtk.Box):
         active_id = active_workspace.get("id") if active_workspace else None
         
         if active_id:
-#            print(f"Current workspace: {active_id}")
             new_range = self.get_workspace_range(active_id)
             if new_range != self.current_range:
+                # Workspace range changed, rebuild indicators
                 self.current_range = new_range
                 self.setup_workspace_indicators()
-                workspace_dict = {ws.get("id"): ws.get("windows", 0) for ws in workspaces}
-                for i, button in self.workspace_buttons.items():
-                    button.remove_css_class("active")
-                    button.remove_css_class("empty")
-                    button.set_margin_start(0)
-                    button.set_margin_end(0)
-                    has_windows = workspace_dict.get(i, 0) > 0
-                    if i == active_id:
-                        button.set_label(str(i))
-                        button.add_css_class("active")
-                        button.set_margin_start(self.margin_target_value)
-                        button.set_margin_end(self.margin_target_value)
-                    elif has_windows:
-                        button.add_css_class("has-windows")
-                        button.set_label(str(i))
-                    else:
-                        button.add_css_class("empty")
-                        button.set_label("•")
-                GLib.timeout_add(50, self.update_initial_gradient_position)
+                self.update_workspace_states()
+                # Reset initialization flag and reposition
+                self.is_initialized = False
+                GLib.timeout_add(50, self.ensure_initial_positioning)
                 self.previous_workspace = active_id
                 return
 
-        # Updated loop: uniformly update each button's label and CSS classes.
+        # Update workspace states
         workspace_dict = {ws.get("id"): ws.get("windows", 0) for ws in workspaces}
         for i, button in self.workspace_buttons.items():
             has_windows = workspace_dict.get(i, 0) > 0
@@ -243,9 +315,16 @@ class WorkspaceIndicator(Gtk.Box):
                     button.add_css_class("empty")
                     button.remove_css_class("active")
                     button.remove_css_class("has-windows")
+        
+        # Handle workspace change animation
         if self.previous_workspace != active_id:
             self.previous_workspace = active_id
-            GLib.timeout_add(20, self.start_animation_sequence, active_id)
+            if self.is_initialized:
+                GLib.timeout_add(20, self.start_animation_sequence, active_id)
+            else:
+                # If not initialized yet, just position directly
+                GLib.timeout_add(50, self.ensure_initial_positioning)
+    
     def calculate_final_gradient_position(self, active_id):
         """Calculate the final gradient position after margins are applied."""
         if active_id not in self.workspace_buttons:
@@ -262,6 +341,7 @@ class WorkspaceIndicator(Gtk.Box):
         active_width = active_button.get_allocation().width if active_button.get_allocation() else 0
         final_center = final_x + active_width / 2
         return final_center
+    
     def start_animation_sequence(self, active_id):
         """Start multi-phase animation for workspace transition."""
         if self.frame and active_id:
@@ -273,7 +353,6 @@ class WorkspaceIndicator(Gtk.Box):
                 self.animation_active = True
                 self.animation_start_time = GLib.get_monotonic_time()
                 self.animation_start_position = self.animation_current_position
-                # Use final position instead of current position
                 self.animation_target_position = self.calculate_final_gradient_position(active_id)
                 self.current_active_button = new_active_button
                 
@@ -305,25 +384,19 @@ class WorkspaceIndicator(Gtk.Box):
             self.finish_animation()
             return False
 
-        # Check for phase transition *before* calculating progress for the current phase
         if self.animation_phase == self.PHASE_MOVE_GRADIENT_AND_ADJUST_MARGINS and elapsed_total >= self.phase_start_times[1]:
-            # Store state *at the end* of phase 1
             self.phase_finalize_start_position = self.animation_current_position
-            # Calculate the width at the exact end of phase 1 (progress = 1.0)
             distance = abs(self.animation_target_position - self.animation_start_position)
             peak_width = self.normal_gradient_half_width + 0.4 * distance
-            # Width calculation at the end of phase 1 (progress = 1.0)
             self.gradient_width_at_phase_change = peak_width - (peak_width - self.normal_gradient_half_width) * ((1.0 - 0.5) / 0.5)
             
             self.animation_phase = self.PHASE_FINALIZE
-            # Recalculate phase elapsed and progress for the new phase
             phase_start_time = self.phase_start_times[self.animation_phase]
             phase_duration = self.phase_durations[self.animation_phase]
             phase_elapsed = elapsed_total - phase_start_time
             phase_progress = min(phase_elapsed / phase_duration, 1.0)
             eased_progress = 0.5 * (1 - math.cos(math.pi * phase_progress))
         else:
-            # Calculate progress normally if no phase transition
             phase_start_time = self.phase_start_times[self.animation_phase]
             phase_duration = self.phase_durations[self.animation_phase]
             phase_elapsed = elapsed_total - phase_start_time
@@ -364,7 +437,6 @@ class WorkspaceIndicator(Gtk.Box):
             if self.current_active_button and self.current_active_button.get_realized():
                 allocation = self.current_active_button.get_allocation()
                 btn_center = allocation.x + (allocation.width / 2)
-                # Smooth interpolation from the position at the start of this phase
                 self.animation_current_position = (
                     self.phase_finalize_start_position +
                     (btn_center - self.phase_finalize_start_position) * eased_progress
@@ -409,26 +481,6 @@ class WorkspaceIndicator(Gtk.Box):
     def on_workspace_clicked(self, button, workspace_id):
         """Switch to clicked workspace."""
         self.hyprland.switch_to_workspace(workspace_id)
-    
-    def on_map_event(self, widget):
-        """Handle map event for initial gradient positioning."""
-        GLib.timeout_add(50, self.update_initial_gradient_position)
-        return False
-    
-    def update_initial_gradient_position(self):
-        """Update gradient position after initial realization."""
-        active_workspace = self.hyprland.get_active_workspace()
-        active_id = active_workspace.get("id") if active_workspace else None
-        
-        if active_id and active_id in self.workspace_buttons:
-            button = self.workspace_buttons[active_id]
-            if button.get_realized() and button.get_allocation():
-                center_x = button.get_allocation().x + (button.get_allocation().width / 2)
-                self.animation_current_position = center_x
-                self.set_gradient_position(center_x)
-                self.animation_start_position = center_x
-                self.animation_target_position = center_x
-        return False
 
 
 class WorkspaceBar(Gtk.Box):
@@ -446,6 +498,7 @@ class WorkspaceBar(Gtk.Box):
         frame.set_valign(Gtk.Align.CENTER)
         frame.vexpand = True
         frame.set_size_request(-1, 40)
+        
         # Add workspace indicator
         self.workspace_indicator = WorkspaceIndicator()
         self.workspace_indicator.frame = frame
@@ -461,6 +514,7 @@ class WorkspaceBar(Gtk.Box):
         )
         scroll_controller.connect("scroll", self.workspace_indicator.on_scroll)
         self.add_controller(scroll_controller)
+
 
 # For standalone testing
 if __name__ == "__main__":

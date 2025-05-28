@@ -130,6 +130,7 @@ def reload_css(css_provider, windows, css_path):
     except GLib.Error as e:
         print(f"Error reloading CSS: {e}")
 
+
 # Run the application
 app = MyApp(application_id='com.example.gtk4.bar')
 try:

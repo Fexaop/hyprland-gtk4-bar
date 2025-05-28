@@ -14,8 +14,8 @@
   min-width: 300px;
 }
 #notch-content.music{
-  min-height: 250px;
-  min-width: 420px;
+  min-height: 180px;
+  min-width: 460px;
   border-radius: 0 0 16px 16px;
 }
 #notch-content {
@@ -44,7 +44,7 @@
 #notch-content.notification {
   padding: 16px;
   min-height: 75px;
-  min-width: 385px;
+  min-width: 420px;
   border-radius: 0 0 16px 16px;
   opacity: 1;
 }
@@ -107,18 +107,10 @@
     margin: 0;
     min-width: 32px;
     min-height: 32px;
-}
-
-.player-icon-label {
-    font-size: 16px; /* Smaller font size for subtlety */
-    text-align: center;
+    justify-content: center;
+    align-items: center;
 }
 
 .player-icon:hover {
-    opacity: 0.7; /* Subtle hover effect */
-}
-
-.active {
-    background-color: white;
-    color: black;
+    opacity: 0.7;
 }
