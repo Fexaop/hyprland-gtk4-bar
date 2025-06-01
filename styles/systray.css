@@ -5,19 +5,18 @@
 }
 
 .tray-icon:hover {
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: transparent;
 }
 
 .tray-icon:active {
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: transparent;
 }
 
 .SysTray {
     padding: 0px;
-    margin-left: -1px;
 }
 .systemtray-content{
-    background-color: #000000;
+    background-color: var(--background-rgba);
     border-radius: 0 0 0 16px;
     padding-left: 10px;
     padding-right: 10px;
@@ -33,12 +32,12 @@
 }
 
 .SysTray button:hover {
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: transparent;
 }
 
 /* Target specific elements in popovers that might add padding */
 popover {
-    color: #ffffff;
+    color: var(--foreground);
     padding: 0;
     margin: 0;
     min-height: 0;
@@ -74,7 +73,7 @@ popover menuitem {
 
 /* Hide arrow */
 popover arrow {
-    background-color: black;
+    background-color: var(--background);
 }
 
 /* Extra specificity for the dark menu class */
@@ -88,9 +87,9 @@ popover arrow {
 /* Target GTK's internal menu structure */
 .dark-menu contents {
     padding: 0px;
-    background-color: #000000;
+    background-color: var(--background);
     margin: 0;
-    color: #ffffff;
+    color: var(--foreground);
     border-radius: 16px;
 }
 

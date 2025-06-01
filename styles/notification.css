@@ -51,7 +51,7 @@
   font-weight: thinner;
 }
 #notification-close-label{
-  color: #E36F88;
+  color: var(--red-dim);
   font-weight: bold;
 }
 

@@ -59,7 +59,7 @@ class Corner(Gtk.DrawingArea):
         self._orientation = get_enum_member(CornerOrientation, orientation)
         # In GTK4, use set_draw_func() instead of the "draw" signal.
         self.set_draw_func(self.on_draw)
-
+        self.add_css_class("corner")
     @property
     def orientation(self) -> CornerOrientation:
         return self._orientation
@@ -103,16 +103,26 @@ class Corner(Gtk.DrawingArea):
             cr.curve_to(width, height, width, 0, width, 0)
         cr.close_path()
         cr.restore()
+    def get_css_color_from_context(self, widget, property_name):
+        """Get color from GTK style context"""
+        style_context = widget.get_style_context()
+        
+        # Get the color property
+        color = style_context.get_color()  # Gets current foreground color
+        # or for background:
+        # You might need to add a CSS class and query it
+        
+        return (color.red, color.green, color.blue, color.alpha)
+
     def on_draw(self, drawing_area, cr: cairo.Context, width: int, height: int):
         cr.save()
-        # Render the shape and clip the drawing region to it.
         self.render_shape(cr, width, height, self._orientation)
         cr.clip()
-    
-        # Fill the clipped region with black.
-        cr.set_source_rgb(0, 0, 0)  # Black color
+        
+        # Get color from style context
+        color = self.get_css_color_from_context(drawing_area, 'background-color')
+        cr.set_source_rgba(*color)
         cr.rectangle(0, 0, width, height)
         cr.fill()
-    
         cr.restore()
-    
+        

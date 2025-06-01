@@ -1,7 +1,7 @@
 from ctypes import CDLL
 import gi
 import os
-
+import logging
 # Load GTK4 Layer Shell
 try:
     CDLL('libgtk4-layer-shell.so')
@@ -131,6 +131,11 @@ def reload_css(css_provider, windows, css_path):
         print(f"Error reloading CSS: {e}")
 
 
+class GTKWarningFilter(logging.Filter):
+    def filter(self, record):
+        return "reported min height" not in record.getMessage()
+
+logging.getLogger().addFilter(GTKWarningFilter())
 # Run the application
 app = MyApp(application_id='com.example.gtk4.bar')
 try:

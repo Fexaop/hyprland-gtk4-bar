@@ -5,7 +5,7 @@ import tempfile
 from service.mpris import MprisPlayerManager, MprisPlayer
 from widgets.progressbar import CustomProgressBar
 import modules.icons as icons
-
+import hashlib
 class MusicPlayer(Gtk.Box):
     def __init__(self):
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
@@ -184,6 +184,7 @@ class MusicPlayer(Gtk.Box):
         label.set_valign(Gtk.Align.CENTER)
         
         button = Gtk.Button()
+        button.set_css_classes(["switcher-button"])
         button.set_child(label)
         button.set_size_request(32, 32)
         button.get_style_context().add_class("player-icon")
@@ -434,3 +435,4 @@ class MusicPlayer(Gtk.Box):
         self._is_seeking = False
         self._seek_end_timeout_id = None
         return False
+    

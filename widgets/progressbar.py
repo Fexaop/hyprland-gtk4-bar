@@ -159,3 +159,4 @@ class CustomProgressBar(Gtk.Box):
         self.set_fraction_immediate(new_fraction)
         self.emit("value-changed", new_fraction)
         return True
+

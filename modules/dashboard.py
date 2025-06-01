@@ -30,8 +30,6 @@ class Dashboard(Gtk.Box):
         right_side = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         calendar = Gtk.Calendar(name="calendar")
         right_side.append(calendar)
-        
-        # Add right side to expanded box
         expanded_box.append(right_side)
         
         # Add expanded box to dashboard

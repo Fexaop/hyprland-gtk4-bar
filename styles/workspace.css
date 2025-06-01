@@ -6,7 +6,7 @@
     padding: 0px;  /* Remove button padding */
     margin: 0px;   /* Remove button margins */
     background: transparent;
-    color: gray;
+    color: var(--secondary);
     min-width: 0;        /* Allow button to shrink */
     min-height: 0;
 }
@@ -16,27 +16,27 @@
 }
 /* Empty workspace styling - smaller dot */
 .workspace-button.empty {
-    color: #555555;
+    color: var(--secondary);
     font-size: 10px;  /* Make dot larger */
 }
 
 .workspace-button.has-windows {
-    color: #f5f5f5a8;
+    color: var(--secondary);
 }
 
 /* Button directly under gradient should have black text */
 .workspace-button.under-gradient {
-    color: black;
+    color: var(--background);
 }
 
 /* When button has windows but is under gradient, text should be black */
 .workspace-button.has-windows.under-gradient {
-    color: black;
+    color: var(--background);
 }
 
 /* Empty workspace under gradient styling */
 .workspace-button.empty.under-gradient {
-    color: black;
+    color: var(--background);
 }
 
 #bar {
@@ -51,10 +51,10 @@
 
 /* Style for the workspace frame - now just a container */
 #workspace-frame {
-    background-color: black;
+    background-color: var(--background-rgba);
     border-radius: 0 0 16px 0;
-    border-color: black;
-    margin-right: -1px;
+    border-color: transparent;
+    margin-right: 0px;
 }
 /* Style for the inner box with gradient */
 #workspace-inner-box {
@@ -62,21 +62,21 @@
     --gradient-half-width: 20px; /* Increased from 10px to 20px for 40px total width */
 
     background-image: 
-      /* Left semicircle: white on right, transparent on left */
-      radial-gradient(circle at right center, white 10px, transparent 10.1px),
-      /* Center white box */
-      linear-gradient(white, white),
-      /* Right semicircle: white on left, transparent on right */
-      radial-gradient(circle at left center, white 10px, transparent 10.1px);
+      /* Left semicircle: var(--foreground) on right, transparent on left */
+      radial-gradient(circle at right center, var(--foreground) 10px, transparent 10.1px),
+      /* Center var(--foreground) box */
+      linear-gradient(var(--foreground), var(--foreground)),
+      /* Right semicircle: var(--foreground) on left, transparent on right */
+      radial-gradient(circle at left center, var(--foreground) 10px, transparent 10.1px);
     background-repeat: no-repeat;
     /* Left & right semicircles are fixed at 20px; center is dynamic */
     background-size: 20px 20px, calc(var(--gradient-half-width) + 2px) 20px, 20px 20px;
     /* 
       Positions:
-        • Left semicircle: its block ends at the white box's left edge, i.e.
+        • Left semicircle: its block ends at the var(--foreground) box's left edge, i.e.
           (offset – 20px).
-        • White center box: starts at the offset value.
-        • Right semicircle: starts at the right edge of the white box,
+        • var(--foreground) center box: starts at the offset value.
+        • Right semicircle: starts at the right edge of the var(--foreground) box,
           i.e. (offset + gradient-half-width).
     */
     background-position: 
