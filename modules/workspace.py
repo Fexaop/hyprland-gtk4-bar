@@ -268,12 +268,12 @@ class WorkspaceIndicator(Gtk.Box):
     
     def on_realize_event(self, widget):
         """Handle realize event."""
-        GLib.timeout_add(10, self.ensure_initial_positioning)
+        GLib.idle_add(self.ensure_initial_positioning)
         return False
     
     def on_map_event(self, widget):
         """Handle map event for initial gradient positioning."""
-        GLib.timeout_add(50, self.ensure_initial_positioning)
+        GLib.idle_add(self.ensure_initial_positioning)
         return False
     
     def update_workspaces(self, *args):
@@ -291,7 +291,7 @@ class WorkspaceIndicator(Gtk.Box):
                 self.update_workspace_states()
                 # Reset initialization flag and reposition
                 self.is_initialized = False
-                GLib.timeout_add(50, self.ensure_initial_positioning)
+                GLib.idle_add(self.ensure_initial_positioning)
                 self.previous_workspace = active_id
                 return
 
@@ -320,10 +320,10 @@ class WorkspaceIndicator(Gtk.Box):
         if self.previous_workspace != active_id:
             self.previous_workspace = active_id
             if self.is_initialized:
-                GLib.timeout_add(20, self.start_animation_sequence, active_id)
+                GLib.idle_add(self.start_animation_sequence, active_id)
             else:
                 # If not initialized yet, just position directly
-                GLib.timeout_add(50, self.ensure_initial_positioning)
+                GLib.idle_add(self.ensure_initial_positioning)
     
     def calculate_final_gradient_position(self, active_id):
         """Calculate the final gradient position after margins are applied."""
@@ -365,9 +365,9 @@ class WorkspaceIndicator(Gtk.Box):
                 
                 self.animation_phase = self.PHASE_MOVE_GRADIENT_AND_ADJUST_MARGINS
                 self.phase_start_times = [0, self.phase_durations[0]]
-                self.animation_source_id = GLib.timeout_add(7, self.multi_phase_animation_step)
+                self.animation_source_id = GLib.idle_add(self.multi_phase_animation_step)
             else:
-                GLib.timeout_add(20, self.start_animation_sequence, active_id)
+                GLib.idle_add(self.start_animation_sequence, active_id)
                 return False
         return False
 

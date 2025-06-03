@@ -12,9 +12,10 @@ from gi.repository import Gtk4LayerShell as LayerShell
 import datetime
 from widgets.corner import Corner
 from modules.dashboard import Dashboard
-from modules.music import MusicPlayer # Assuming this is correctly importable
+from modules.music import MusicPlayer
 from modules.notifications import NotificationCenter
 from modules.osd import Osd
+from modules.applauncher import ApplicationLauncherBox
 class Notch(Gtk.Overlay):
     def __init__(self, **kwargs):
         super().__init__(name="notch-overlay")
@@ -26,10 +27,41 @@ class Notch(Gtk.Overlay):
         self.set_focusable(True)
         
         self.normal_height = 30
+        self.previous_widget = 'active-event-box'
+        
+        # Widget configurations for easier management
+        self.widget_configs = {
+            'dashboard': {'css_class': 'dashboard', 'widget': None},
+            'music': {'css_class': 'music', 'widget': None},
+            'notification': {'css_class': 'notification', 'widget': None},
+            'osd': {'css_class': 'osd', 'widget': None},
+            'applauncher': {'css_class': 'applauncher', 'widget': None}
+        }
+        
+        self._init_widgets()
+        self._init_stack()
+        self._init_controllers()
+        self._init_corners()
+        self._start_timers()
+
+    def _init_widgets(self):
+        """Initialize all widgets"""
         self.dashboard = Dashboard(notch=self)
         self.osd = Osd(notch=self)
-        self.music_player = MusicPlayer() # MusicPlayer instantiated here
-
+        self.music_player = MusicPlayer()
+        self.applauncher = ApplicationLauncherBox(notch=self)
+        self.notification_center = NotificationCenter(self)
+        
+        # Update widget configs
+        self.widget_configs['dashboard']['widget'] = self.dashboard
+        self.widget_configs['music']['widget'] = self.music_player
+        self.widget_configs['osd']['widget'] = self.osd
+        self.widget_configs['applauncher']['widget'] = self.applauncher
+        self.widget_configs['notification']['widget'] = self.notification_center.notification_view
+        
+    def _init_stack(self):
+        """Initialize the main stack and active event box"""
+        # Active event box setup
         self.active_event_box = Gtk.Stack(
             name="active-event-box",
             transition_type="crossfade",
@@ -40,19 +72,12 @@ class Notch(Gtk.Overlay):
         self.active_event_box.set_vexpand(True)
         self.active_event_box.set_hexpand(True)
         
-        scroll_controller_active_box = Gtk.EventControllerScroll()
-        scroll_controller_active_box.set_flags(Gtk.EventControllerScrollFlags.VERTICAL)
-        scroll_controller_active_box.connect("scroll", self.on_active_event_box_scroll)
-        self.active_event_box.add_controller(scroll_controller_active_box)
-        
+        # Time label
         self.time_label = Gtk.Label()
-        now = datetime.datetime.now()
-        time_str = now.strftime("%I:%M %p")
-        date_str = now.strftime(" · %A %d/%m")
-        self.time_label.set_markup(f'<span size="11000" foreground="white"><b>{time_str}</b>{date_str}</span>')
+        self._update_time()
         self.active_event_box.add_named(self.time_label, 'time-date')
-        # self.active_event_box.add_named(self.music_player, 'music') # REMOVED from here
         
+        # Main stack setup
         self.stack = Gtk.Stack(
             name="notch-content",
             transition_type="crossfade",
@@ -61,27 +86,54 @@ class Notch(Gtk.Overlay):
         self.stack.set_hexpand(True)
         self.stack.set_vexpand(True)
         
+        # Add all widgets to stack
         self.stack.add_named(self.dashboard, 'dashboard')
         self.stack.add_named(self.osd, 'osd')
         self.stack.add_named(self.active_event_box, 'active-event-box')
-        self.stack.add_named(self.music_player, 'music') # ADDED music_player to notch-content stack
-
-        self.notification_center = NotificationCenter(self)
+        self.stack.add_named(self.music_player, 'music')
+        self.stack.add_named(self.applauncher, 'applauncher')
+        
+        # Notification page
         self.notification_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, name="notification-page")
         self.notification_page.append(self.notification_center.notification_view)
         self.stack.add_named(self.notification_page, 'notification')
         
         self.stack.set_visible_child_name('active-event-box')
-        self.active_event_box.set_visible_child_name('time-date') # Ensure time-date is default for active_event_box
-
+        self.active_event_box.set_visible_child_name('time-date')
         self.set_child(self.stack)
 
-        # Add scroll controller for notch-content (self.stack)
+    def _init_controllers(self):
+        """Initialize event controllers"""
+        # Scroll controllers
+        scroll_controller_active_box = Gtk.EventControllerScroll()
+        scroll_controller_active_box.set_flags(Gtk.EventControllerScrollFlags.VERTICAL)
+        scroll_controller_active_box.connect("scroll", self.on_active_event_box_scroll)
+        self.active_event_box.add_controller(scroll_controller_active_box)
+        
         notch_content_scroll_controller = Gtk.EventControllerScroll()
         notch_content_scroll_controller.set_flags(Gtk.EventControllerScrollFlags.VERTICAL)
         notch_content_scroll_controller.connect("scroll", self.on_notch_content_scroll)
         self.stack.add_controller(notch_content_scroll_controller)
+        
+        # Click gesture
+        gesture = Gtk.GestureClick()
+        gesture.connect("pressed", self.on_active_event_box_click)
+        self.time_label.add_controller(gesture)
+        
+        # Key controllers
+        widgets_for_key_control = [
+            self, self.dashboard, self.notification_page, 
+            self.active_event_box, self.stack, self.music_player, self.osd, self.applauncher
+        ]
+        
+        for widget in widgets_for_key_control:
+            key_controller = Gtk.EventControllerKey.new()
+            key_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+            key_controller.connect("key-pressed", self.on_key_pressed)
+            widget.add_controller(key_controller)
 
+    def _init_corners(self):
+        """Initialize corner widgets"""
         self.left_corner = Corner("top-right")
         self.left_corner.set_size_request(20, 30)
         self.left_corner.set_halign(Gtk.Align.START)
@@ -93,244 +145,240 @@ class Notch(Gtk.Overlay):
         self.right_corner.set_halign(Gtk.Align.END)
         self.right_corner.set_valign(Gtk.Align.START)
         self.add_overlay(self.right_corner)
-        
-        gesture = Gtk.GestureClick()
-        gesture.connect("pressed", self.on_active_event_box_click)
-        self.time_label.add_controller(gesture) # Assuming click on time_label opens dashboard
-        
-        # Key controllers
-        self.key_controller = Gtk.EventControllerKey.new()
-        self.key_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-        self.key_controller.connect("key-pressed", self.on_key_pressed)
-        self.add_controller(self.key_controller)
-        
-        for widget in [self.dashboard, self.notification_page, self.active_event_box, self.stack, self.music_player, self.osd]:
-            key_controller = Gtk.EventControllerKey.new()
-            key_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-            key_controller.connect("key-pressed", self.on_key_pressed)
-            widget.add_controller(key_controller)
-        
-        GLib.timeout_add_seconds(1, self.update_time)
+
+    def _start_timers(self):
+        """Start periodic timers"""
+        GLib.timeout_add_seconds(1, self._update_time)
         GLib.timeout_add(100, self.ensure_keyboard_focus)
-        self.previous_widget = 'active-event-box'
 
     def ensure_keyboard_focus(self):
+        """Ensure keyboard focus is maintained"""
         self.grab_focus()
         return False
 
-    def update_time(self):
+    def _update_time(self):
+        """Update time display"""
         now = datetime.datetime.now()
         time_str = now.strftime("%I:%M %p")
         date_str = now.strftime(" · %A %d/%m")
         self.time_label.set_markup(f'<span size="11000" foreground="white"><b>{time_str}</b>{date_str}</span>')
         return True
 
+    def _apply_widget_styling(self, widget_name, is_opening=True):
+        """Apply or remove CSS styling for widgets with GLib.idle_add for smooth transitions"""
+        if widget_name not in self.widget_configs:
+            return
+            
+        config = self.widget_configs[widget_name]
+        css_class = config['css_class']
+        widget = config['widget']
+        
+        def apply_stack_class():
+            if is_opening:
+                self.stack.add_css_class(css_class)
+            else:
+                self.stack.remove_css_class(css_class)
+            return False
+            
+        def apply_widget_class():
+            if widget and hasattr(widget, 'add_css_class'):
+                if is_opening:
+                    widget.add_css_class("open")
+                else:
+                    widget.remove_css_class("open")
+            return False
+        
+        # Use GLib.idle_add for smooth CSS transitions
+        GLib.idle_add(apply_stack_class)
+        GLib.idle_add(apply_widget_class)
+
+    def _focus_widget(self, widget_name):
+        """Handle focus for opened widgets"""
+        def do_focus():
+            if widget_name == 'notification':
+                self.notification_center.notification_view.grab_focus()
+            elif widget_name == 'dashboard':
+                # Focus dashboard children if needed
+                for child in self.dashboard:
+                    if hasattr(child, 'grab_focus'):
+                        child.grab_focus()
+                        break
+            elif widget_name == 'applauncher':
+                # Focus applauncher children if needed
+                for child in self.applauncher:
+                    if hasattr(child, 'grab_focus'):
+                        child.grab_focus()
+                        break
+            else:
+                newly_opened_widget = self.stack.get_visible_child()
+                if newly_opened_widget and hasattr(newly_opened_widget, 'grab_focus'):
+                    newly_opened_widget.grab_focus()
+            
+            self.grab_focus()
+            return False
+        
+        GLib.timeout_add(50, do_focus)
+
     def open_notch(self, widget_name):
+        """Open a specific notch widget"""
         current = self.stack.get_visible_child_name()
         if current == widget_name:
             return
             
-        if widget_name == 'notification' or widget_name == 'osd':
-            if self.previous_widget == "osd" or self.previous_widget == "notification":
-                self.previous_widget = self.previous_widget
-            else:
+        # Handle previous widget tracking for notifications/osd
+        if widget_name in ['notification', 'osd']:
+            if self.previous_widget not in ["osd", "notification"]:
                 self.previous_widget = current
         
-        # Close any currently active widget styling
-        if current == 'dashboard':
-            self.stack.remove_css_class("dashboard")
-            self.dashboard.remove_css_class("open")
-        elif current == 'notification':
-            self.stack.remove_css_class("notification")
-            self.notification_center.notification_view.remove_css_class("open")
-        elif current == 'music': # ADDED
-            self.stack.remove_css_class("music")
-            self.music_player.remove_css_class("open")
-        elif current == 'osd':
-            self.stack.remove_css_class("osd")
-            self.osd.remove_css_class("open")
-        # Open the requested widget styling
-        if widget_name == 'dashboard':
-            self.stack.add_css_class("dashboard")
-            self.dashboard.add_css_class("open")
-        elif widget_name == 'notification':
-            self.stack.add_css_class("notification")
-            self.notification_center.notification_view.add_css_class("open")
-        elif widget_name == 'music': # ADDED
-            self.stack.add_css_class("music")
-            self.music_player.add_css_class("open")
-        elif widget_name == 'osd':
-            self.stack.add_css_class("osd")
-            self.osd.add_css_class("open")
+        # Close current widget styling
+        if current in self.widget_configs:
+            self._apply_widget_styling(current, is_opening=False)
+        
+        # Open new widget styling
+        if widget_name in self.widget_configs:
+            self._apply_widget_styling(widget_name, is_opening=True)
 
         self.stack.set_visible_child_name(widget_name)
-        
-        # Focus handling
-        newly_opened_widget = self.stack.get_visible_child()
-        if newly_opened_widget and hasattr(newly_opened_widget, 'grab_focus'):
-            newly_opened_widget.grab_focus()
-            # Special handling for composite widgets like notification_page
-            if widget_name == 'notification':
-                 self.notification_center.notification_view.grab_focus()
-            elif widget_name == 'dashboard': # Force focus on dashboard children if needed
-                for child in self.dashboard:
-                    if hasattr(child, 'grab_focus'): child.grab_focus()
-
-        self.grab_focus() # Focus the overlay itself
-        GLib.timeout_add(50, lambda: self.grab_focus() and False) # Ensure focus
-
-    def on_active_event_box_click(self, gesture, n_press, x, y):
-        self.open_notch('dashboard')
-        return True
-
-    def show_notification(self):
-        current = self.stack.get_visible_child_name()
-        if current != 'notification':
-            self.previous_widget = current
-        self.open_notch('notification')
+        self._focus_widget(widget_name)
 
     def collapse_notch(self):
+        """Collapse notch to previous state"""
         current = self.stack.get_visible_child_name()
         
-        # This method is primarily for notifications returning to a previous state.
-        # Other collapses (dashboard, music via ESC) are handled directly in on_key_pressed.
-        if current == 'notification' or current == 'osd':
+        if current in ['notification', 'osd']:
+            # Close current widget
+            self._apply_widget_styling(current, is_opening=False)
+            
             if current == 'notification':
-                self.stack.remove_css_class("notification")
-                self.notification_center.notification_view.remove_css_class("open")
                 self.notification_center.is_showing = False
-            elif current == 'osd':
-                self.stack.remove_css_class("osd")
-                self.osd.remove_css_class("open")
-            # Restore previous widget's styling
-            if self.previous_widget == 'dashboard':
-                self.stack.add_css_class("dashboard")
-                self.dashboard.add_css_class("open")
-            elif self.previous_widget == 'music': # ADDED
-                self.stack.add_css_class("music")
-                self.music_player.add_css_class("open")
-            elif self.previous_widget == 'osd':
-                self.stack.add_css_class("osd")
-                self.osd.add_css_class("open")
-            # If previous_widget was 'active-event-box', no specific class needed on stack for it.
+            
+            # Restore previous widget
+            if self.previous_widget in self.widget_configs:
+                self._apply_widget_styling(self.previous_widget, is_opening=True)
             
             self.stack.set_visible_child_name(self.previous_widget)
-            # Focus the restored widget
+            
+            # Focus restored widget
             restored_widget = self.stack.get_child_by_name(self.previous_widget)
             if restored_widget and hasattr(restored_widget, 'grab_focus'):
                 restored_widget.grab_focus()
         else:
-            # Fallback for other cases if this method is called unexpectedly
-            if current == 'dashboard':
-                self.stack.remove_css_class("dashboard")
-                self.dashboard.remove_css_class("open")
-            elif current == 'music':
-                self.stack.remove_css_class("music")
-                self.music_player.remove_css_class("open")
+            # Fallback collapse to active-event-box
+            if current in self.widget_configs:
+                self._apply_widget_styling(current, is_opening=False)
+            
             self.stack.set_visible_child_name('active-event-box')
-            self.active_event_box.grab_focus() # Focus active event box
+            self.active_event_box.grab_focus()
         
         return False
 
     def on_key_pressed(self, controller, keyval, keycode, state):
-        if keyval == Gdk.KEY_Escape or keyval == 65307:
+        """Handle key press events"""
+        if keyval in [Gdk.KEY_Escape, 65307]:
             current = self.stack.get_visible_child_name()
             
-            target_widget_for_focus = None
-
-            if current == 'dashboard':
-                self.stack.remove_css_class("dashboard")
-                self.dashboard.remove_css_class("open")
+            if current in ['notification', 'osd']:
+                self.collapse_notch()
+            elif current in self.widget_configs:
+                self._apply_widget_styling(current, is_opening=False)
                 self.stack.set_visible_child_name('active-event-box')
-                target_widget_for_focus = self.active_event_box
-            elif current == 'notification':
-                self.collapse_notch() # Handles returning to previous_widget and its focus
-                return True # collapse_notch handles focus
-            elif current == 'music': # ADDED
-                self.stack.remove_css_class("music")
-                self.music_player.remove_css_class("open")
-                self.stack.set_visible_child_name('active-event-box')
-                target_widget_for_focus = self.active_event_box
-            elif current == 'osd':
-                self.collapse_notch() # Handles returning to previous_widget and its focus
-                return True # collapse_notch handles focus
-
-            if target_widget_for_focus:
-                # Try to focus the actual visible child within active_event_box (e.g., time_label)
-                active_child_of_target = target_widget_for_focus.get_visible_child() if hasattr(target_widget_for_focus, 'get_visible_child') else None
-                if active_child_of_target and hasattr(active_child_of_target, 'grab_focus'):
-                    active_child_of_target.grab_focus()
-                elif hasattr(target_widget_for_focus, 'grab_focus'):
-                    target_widget_for_focus.grab_focus()
-                return True # Key handled
+                
+                # Focus active event box child
+                active_child = self.active_event_box.get_visible_child()
+                if active_child and hasattr(active_child, 'grab_focus'):
+                    active_child.grab_focus()
+                elif hasattr(self.active_event_box, 'grab_focus'):
+                    self.active_event_box.grab_focus()
+            
+            return True
                 
         return False
 
-    # NEW METHOD for scrolling on notch-content (self.stack)
     def on_notch_content_scroll(self, controller, delta_x, delta_y):
+        """Handle scroll events on notch content"""
         current_child_name = self.stack.get_visible_child_name()
-        handled = False
+        
         if current_child_name == 'active-event-box':
             self.open_notch('music')
-            handled = True
+            return True
         elif current_child_name == 'music':
             self.open_notch('active-event-box')
-            handled = True
-        return handled # True if event was handled, False otherwise to allow propagation
+            return True
+        
+        return False
 
     def on_active_event_box_scroll(self, controller, delta_x, delta_y):
-        """Handle scroll events to cycle through active_event_box children."""
-        # This method is effective only if active_event_box has more than one child.
-        changed = False
-        if delta_y > 0:
-            changed = self.open_active_event_box_child(1)
-        elif delta_y < 0:
-            changed = self.open_active_event_box_child(-1)
-        return changed # True if handled, False otherwise
+        """Handle scroll events to cycle through active_event_box children"""
+        direction = 1 if delta_y > 0 else -1 if delta_y < 0 else 0
+        if direction != 0:
+            return self.open_active_event_box_child(direction)
+        return False
 
     def open_active_event_box_child(self, direction):
+        """Cycle through active event box children"""
         pages = self.active_event_box.get_pages()
         num_pages = pages.get_n_items()
-        if num_pages <= 1: # No change if 0 or 1 page
+        
+        if num_pages <= 1:
             return False
 
         current_name = self.active_event_box.get_visible_child_name()
         names = [pages.get_item(i).get_name() for i in range(num_pages)]
         
-        if current_name not in names: # Should not happen if initialized correctly
-             # Default to first child if current is somehow invalid and pages exist
+        if current_name not in names:
             current_name = names[0] if names else None
-            if not current_name: return False
-
+            if not current_name:
+                return False
 
         current_index = names.index(current_name)
         new_index = (current_index + direction) % num_pages
         new_name = names[new_index]
         
-        if current_name == new_name: # Already visible or only one item
+        if current_name == new_name:
             return False
 
-        # Close current child styling (if any specific styling was applied)
-        if current_name == 'time-date':
-            self.time_label.remove_css_class("open") # Assuming "open" class for active item
-        # Add other cases if more children are added to active_event_box
+        # Handle styling transitions
+        def update_styling():
+            # Remove old styling
+            if current_name == 'time-date':
+                self.time_label.remove_css_class("open")
             
-        # Open new child styling
-        if new_name == 'time-date':
-            self.time_label.add_css_class("open")
-        # Add other cases for new children
+            # Add new styling
+            if new_name == 'time-date':
+                self.time_label.add_css_class("open")
+            
+            return False
+        
+        GLib.idle_add(update_styling)
         
         self.active_event_box.set_visible_child_name(new_name)
         
-        new_child_widget = self.active_event_box.get_child_by_name(new_name)
-        if new_child_widget and hasattr(new_child_widget, 'grab_focus'):
-            new_child_widget.grab_focus()
-        else:
-            self.active_event_box.grab_focus() # Fallback to stack focus
+        # Focus new child
+        def focus_new_child():
+            new_child_widget = self.active_event_box.get_child_by_name(new_name)
+            if new_child_widget and hasattr(new_child_widget, 'grab_focus'):
+                new_child_widget.grab_focus()
+            else:
+                self.active_event_box.grab_focus()
+            return False
         
-        GLib.timeout_add(50, lambda: (new_child_widget.grab_focus() if new_child_widget and hasattr(new_child_widget, 'grab_focus') else self.active_event_box.grab_focus()) and False)
+        GLib.timeout_add(50, focus_new_child)
         return True
+
+    def on_active_event_box_click(self, gesture, n_press, x, y):
+        """Handle click on active event box"""
+        self.open_notch('dashboard')
+        return True
+
+    def show_notification(self):
+        """Show notification center"""
+        current = self.stack.get_visible_child_name()
+        if current != 'notification':
+            self.previous_widget = current
+        self.open_notch('notification')
+
     def print_box_size(self):
+        """Debug method to print box size"""
         width = self.get_allocated_width()
         height = self.get_allocated_height()
         print(f"Width: {width}, Height: {height}")
