@@ -16,14 +16,12 @@ from modules.music import MusicPlayer
 from modules.notifications import NotificationCenter
 from modules.osd import Osd
 from modules.applauncher import ApplicationLauncherBox
-
-
 class Notch(Gtk.Overlay):
-    def __init__(self, **kwargs):
+    def __init__(self,  notch_window=None, **kwargs):
         super().__init__(name="notch-overlay")
         self.set_halign(Gtk.Align.CENTER)
         self.set_valign(Gtk.Align.CENTER)
-        
+        self.notch_window = notch_window
         self.set_can_target(True)
         self.set_can_focus(True)
         self.set_focusable(True)
@@ -194,38 +192,18 @@ class Notch(Gtk.Overlay):
         GLib.idle_add(apply_stack_class)
         GLib.idle_add(apply_widget_class)
 
-    def _focus_widget(self, widget_name):
-        """Handle focus for opened widgets"""
-        def do_focus():
-            if widget_name == 'notification':
-                self.notification_center.notification_view.grab_focus()
-            elif widget_name == 'dashboard':
-                # Focus dashboard children if needed
-                for child in self.dashboard:
-                    if hasattr(child, 'grab_focus'):
-                        child.grab_focus()
-                        break
-            elif widget_name == 'applauncher':
-                # Focus applauncher children if needed
-                for child in self.applauncher:
-                    if hasattr(child, 'grab_focus'):
-                        child.grab_focus()
-                        break
-            else:
-                newly_opened_widget = self.stack.get_visible_child()
-                if newly_opened_widget and hasattr(newly_opened_widget, 'grab_focus'):
-                    newly_opened_widget.grab_focus()
-            
-            self.grab_focus()
-            return False
-        
-        GLib.timeout_add(50, do_focus)
-
     def open_notch(self, widget_name):
         """Open a specific notch widget"""
         current = self.stack.get_visible_child_name()
         if current == widget_name:
             return
+            
+        # Handle keyboard mode for applauncher
+        if widget_name == 'applauncher' and self.notch_window:
+            LayerShell.set_keyboard_mode(self.notch_window, LayerShell.KeyboardMode.EXCLUSIVE)
+        elif current == 'applauncher' and self.notch_window:
+            # Restore to ON_DEMAND when leaving applauncher
+            LayerShell.set_keyboard_mode(self.notch_window, LayerShell.KeyboardMode.ON_DEMAND)
             
         # Handle previous widget tracking for notifications/osd
         if widget_name in ['notification', 'osd']:
@@ -243,9 +221,60 @@ class Notch(Gtk.Overlay):
         self.stack.set_visible_child_name(widget_name)
         self._focus_widget(widget_name)
 
+    def _focus_widget(self, widget_name):
+        """Handle focus for opened widgets"""
+        def do_focus():
+            if widget_name == 'notification':
+                self.notification_center.notification_view.grab_focus()
+            elif widget_name == 'dashboard':
+                # Focus dashboard children if needed
+                for child in self.dashboard:
+                    if hasattr(child, 'grab_focus'):
+                        child.grab_focus()
+                        break
+            elif widget_name == 'applauncher':
+                # Special handling for applauncher search input
+                if hasattr(self.applauncher, 'search_entry'):
+                    # Ensure the search entry is focusable
+                    self.applauncher.search_entry.set_can_focus(True)
+                    self.applauncher.search_entry.set_receives_default(True)
+                    
+                    # Clear any existing text and focus
+                    self.applauncher.search_entry.set_text("")
+                    self.applauncher.search_entry.grab_focus()
+                    
+                    # Additional method to ensure cursor is in the entry
+                    if hasattr(self.applauncher.search_entry, 'set_position'):
+                        self.applauncher.search_entry.set_position(-1)
+                    
+                    print(f"Search entry focused: {self.applauncher.search_entry.has_focus()}")
+                else:
+                    self.applauncher.grab_focus()
+            else:
+                newly_opened_widget = self.stack.get_visible_child()
+                if newly_opened_widget and hasattr(newly_opened_widget, 'grab_focus'):
+                    newly_opened_widget.grab_focus()
+            
+            # Don't grab focus back to notch when focusing applauncher
+            if widget_name != 'applauncher':
+                self.grab_focus()
+            return False
+        
+        # For applauncher, use multiple attempts with longer delays to work with EXCLUSIVE mode
+        if widget_name == 'applauncher':
+            GLib.timeout_add(100, do_focus)
+            GLib.timeout_add(200, do_focus)
+            GLib.timeout_add(300, do_focus)
+        else:
+            GLib.timeout_add(50, do_focus)
+
     def collapse_notch(self):
         """Collapse notch to previous state"""
         current = self.stack.get_visible_child_name()
+        
+        # Restore keyboard mode when collapsing from applauncher
+        if current == 'applauncher' and self.notch_window:
+            LayerShell.set_keyboard_mode(self.notch_window, LayerShell.KeyboardMode.ON_DEMAND)
         
         if current in ['notification', 'osd']:
             # Close current widget
@@ -278,6 +307,10 @@ class Notch(Gtk.Overlay):
         """Handle key press events"""
         if keyval in [Gdk.KEY_Escape, 65307]:
             current = self.stack.get_visible_child_name()
+            
+            # Restore keyboard mode when escaping from applauncher
+            if current == 'applauncher' and self.notch_window:
+                LayerShell.set_keyboard_mode(self.notch_window, LayerShell.KeyboardMode.ON_DEMAND)
             
             if current in ['notification', 'osd']:
                 self.collapse_notch()
