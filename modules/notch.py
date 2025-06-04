@@ -16,6 +16,8 @@ from modules.music import MusicPlayer
 from modules.notifications import NotificationCenter
 from modules.osd import Osd
 from modules.applauncher import ApplicationLauncherBox
+
+
 class Notch(Gtk.Overlay):
     def __init__(self, **kwargs):
         super().__init__(name="notch-overlay")

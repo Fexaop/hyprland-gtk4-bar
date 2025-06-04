@@ -24,27 +24,28 @@ class MyApp(Gtk.Application):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.notch = None  # To store the Notch instance
+        self.notch_window = None  
         self.css_monitors = []  # To store CSS file monitors
 
     def do_activate(self):
         # Create notch window (overlay)
-        notch_window = Gtk.Window(application=self, name="notch")
-        notch_window.set_resizable(False)
-        notch_window.set_decorated(False)
+        self.notch_window = Gtk.Window(application=self, name="notch")
+        self.notch_window.set_resizable(False)
+        self.notch_window.set_decorated(False)
 
         # Initialize LayerShell for notch
-        LayerShell.init_for_window(notch_window)
-        LayerShell.set_layer(notch_window, LayerShell.Layer.TOP)
-        LayerShell.set_anchor(notch_window, LayerShell.Edge.TOP, True)
-        LayerShell.set_keyboard_mode(notch_window, LayerShell.KeyboardMode.ON_DEMAND)
-        LayerShell.set_namespace(notch_window, "notch")
+        LayerShell.init_for_window(self.notch_window)
+        LayerShell.set_layer(self.notch_window, LayerShell.Layer.TOP)
+        LayerShell.set_anchor(self.notch_window, LayerShell.Edge.TOP, True)
+        LayerShell.set_keyboard_mode(self.notch_window, LayerShell.KeyboardMode.ON_DEMAND)
+        LayerShell.set_namespace(self.notch_window, "notch")
 
         # Position the notch
-        LayerShell.set_anchor(notch_window, LayerShell.Edge.LEFT, False)
-        LayerShell.set_anchor(notch_window, LayerShell.Edge.RIGHT, False)
-        LayerShell.set_margin(notch_window, LayerShell.Edge.LEFT, 0)
-        LayerShell.set_margin(notch_window, LayerShell.Edge.RIGHT, 0)
-        LayerShell.set_margin(notch_window, LayerShell.Edge.TOP, -40)
+        LayerShell.set_anchor(self.notch_window, LayerShell.Edge.LEFT, False)
+        LayerShell.set_anchor(self.notch_window, LayerShell.Edge.RIGHT, False)
+        LayerShell.set_margin(self.notch_window, LayerShell.Edge.LEFT, 0)
+        LayerShell.set_margin(self.notch_window, LayerShell.Edge.RIGHT, 0)
+        LayerShell.set_margin(self.notch_window, LayerShell.Edge.TOP, -40)
 
         # Create a box for the notch
         center_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
@@ -52,15 +53,15 @@ class MyApp(Gtk.Application):
         center_box.set_halign(Gtk.Align.CENTER)
 
         # Add notch to center box
-        self.notch = Notch()
+        self.notch = Notch(notch_window=self.notch_window)
         center_box.append(self.notch)
 
         # Set the box as notch window's child
-        notch_window.set_child(center_box)
+        self.notch_window.set_child(center_box)
 
         # Set notch size
         bar_height = 40
-        notch_window.set_size_request(-1, bar_height)
+        self.notch_window.set_size_request(-1, bar_height)
 
         # Create workspace bar
         bar = Bar(self)
@@ -78,7 +79,7 @@ class MyApp(Gtk.Application):
                 'styles/systray.css'
             ]
             os.makedirs('styles', exist_ok=True)
-            windows = [notch_window, bar]
+            windows = [self.notch_window, bar]
             
             for css_file_path in css_files:
                 css_file = Gio.File.new_for_path(css_file_path)
@@ -93,7 +94,7 @@ class MyApp(Gtk.Application):
 
         # Show windows
         bar.present()
-        notch_window.present()
+        self.notch_window.present()
 
     def on_open_notch(self, action, parameter):
         """Handler for the 'open_notch' action."""
