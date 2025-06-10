@@ -80,7 +80,7 @@ class Notch(Gtk.Overlay):
         # Main stack setup
         self.stack = Gtk.Stack(
             name="notch-content",
-            transition_type=Gtk.StackTransitionType.OVER_UP,
+            transition_type=Gtk.StackTransitionType.SLIDE_UP,
             transition_duration=400,
         )
         self.stack.set_hexpand(True)
