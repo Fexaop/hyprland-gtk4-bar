@@ -58,7 +58,7 @@ class NetworkSignals(GObject.GObject):
     __gsignals__ = {
         'wifi-changed': (GObject.SignalFlags.RUN_FIRST, None, ()),
         'wifi-enabled-changed': (GObject.SignalFlags.RUN_FIRST, None, (bool,)),
-        'ethernet-changed': (GObject.SignalFlags.RUN_FIRST, None, ()),
+        'ethernet-changed': (GObject.SignalFlags.RUN_FIRST, None, (str,)), # state
         'device-ready': (GObject.SignalFlags.RUN_FIRST, None, ()),
         'connection-added': (GObject.SignalFlags.RUN_FIRST, None, (str,)),
         'connection-removed': (GObject.SignalFlags.RUN_FIRST, None, (str,)),
@@ -487,69 +487,39 @@ class WiFiManager(GObject.GObject):
 
 
 class EthernetManager(GObject.GObject):
-    # ... (This class is unchanged)
     def __init__(self, client: NM.Client, device: NM.DeviceEthernet):
         super().__init__()
         self.client = client
         self.device = device
         self.signals = NetworkSignals()
-        
-        # Connect to device signals
-        self.device.connect('notify::active-connection', self._on_connection_changed)
-        self.device.connect('notify::speed', self._on_speed_changed)
-        self.device.connect('state-changed', self._on_state_changed)
-    
-    def _on_connection_changed(self, device, pspec):
-        """Handle connection changes"""
-        print("Ethernet connection changed")
-        self.signals.emit('ethernet-changed')
-    
-    def _on_speed_changed(self, device, pspec):
-        """Handle speed changes"""
-        print(f"Ethernet speed changed: {device.get_speed()} Mbps")
-        self.signals.emit('ethernet-changed')
-    
-    def _on_state_changed(self, device, new_state, old_state, reason):
-        """Handle device state changes"""
-        print(f"Ethernet state changed: {old_state} -> {new_state}")
-        self.signals.emit('ethernet-changed')
-    
+
     @property
     def speed(self) -> int:
         """Get ethernet connection speed"""
         return self.device.get_speed()
-    
+
     @property
     def connection_state(self) -> str:
         """Get connection state as string"""
-        active_connection = self.device.get_active_connection()
-        if not active_connection:
-            return "disconnected"
-        
-        state_map = {
-            NM.ActiveConnectionState.ACTIVATED: "activated",
-            NM.ActiveConnectionState.ACTIVATING: "activating",
-            NM.ActiveConnectionState.DEACTIVATING: "deactivating",
-            NM.ActiveConnectionState.DEACTIVATED: "deactivated",
-        }
-        return state_map.get(active_connection.get_state(), "unknown")
-    
+        # Simplified logic: if an active connection object exists, we're connected.
+        if self.device.get_active_connection():
+            return "connected"
+        return "disconnected"
+
     @property
     def icon_name(self) -> str:
         """Get appropriate icon for ethernet state"""
-        state = self.connection_state
-        
-        if state == "activated":
+        if self.connection_state == "activated":
             return "network-wired-symbolic"
-        elif state == "activating":
-            return "network-wired-acquiring-symbolic"
-        elif self.device.get_state() == NM.DeviceState.UNAVAILABLE:
+        else:
             return "network-wired-disconnected-symbolic"
-        
-        return "network-wired-no-route-symbolic"
+
+    @property
+    def iface(self) -> str:
+        """Get ethernet interface name"""
+        return self.device.get_iface()
 
 class NetworkManager(GObject.GObject):
-    # ... (This class is unchanged)
     def __init__(self):
         super().__init__()
         self.client: Optional[NM.Client] = None
@@ -569,33 +539,72 @@ class NetworkManager(GObject.GObject):
             # Connect to global NetworkManager signals
             self.client.connect('connection-added', self._on_connection_added)
             self.client.connect('connection-removed', self._on_connection_removed)
+            self.client.connect('device-added', self._on_device_added)
+            self.client.connect('device-removed', self._on_device_removed)
             
             print("NetworkManager client initialized successfully")
             self.signals.emit('device-ready')
         except Exception as e:
             print(f"Failed to initialize NetworkManager client: {e}")
-    
+
+    def _on_device_added(self, client, device):
+        """Handle newly added network devices."""
+        print(f"Device added: {device.get_iface()} ({device.get_device_type()})")
+        # Check if a manager for this device type needs to be created.
+        device_type = device.get_device_type()
+        if device_type == NM.DeviceType.WIFI and not self.wifi_manager:
+            self.wifi_manager = WiFiManager(self.client, device)
+            print(f"WiFi device initialized: {device.get_iface()}")
+            self.signals.emit('device-ready')
+        elif device_type == NM.DeviceType.ETHERNET and not self.ethernet_manager:
+            self.ethernet_manager = EthernetManager(self.client, device)
+            print(f"Ethernet device initialized: {device.get_iface()}")
+            self.signals.emit('device-ready')
+
+    def _on_device_removed(self, client, device):
+        """Handle removed network devices."""
+        print(f"Device removed: {device.get_iface()}")
+        iface = device.get_iface()
+        
+        if self.wifi_manager and self.wifi_manager.device.get_iface() == iface:
+            self.wifi_manager = None
+            print("WiFi manager removed.")
+            self.signals.emit('device-ready')
+
+        if self.ethernet_manager and self.ethernet_manager.device.get_iface() == iface:
+            self.ethernet_manager = None
+            print("Ethernet manager removed.")
+            self.signals.emit('device-ready')
+
     def _on_connection_added(self, client, connection):
         """Handle new connection added"""
         conn_id = connection.get_id()
         print(f"Connection added: {conn_id}")
         self.signals.emit('connection-added', conn_id)
-        
+
         # Emit specific signal based on connection type
-        if connection.get_connection_type() == "802-11-wireless":
+        connection_type = connection.get_connection_type()
+        if "wireless" in connection_type:
             if self.wifi_manager:
                 self.wifi_manager.signals.emit('wifi-changed')
-    
+        elif "ethernet" in connection_type:
+            if self.ethernet_manager:
+                self.ethernet_manager.signals.emit('ethernet-changed', 'connected')
+
     def _on_connection_removed(self, client, connection):
         """Handle connection removed"""
         conn_id = connection.get_id()
         print(f"Connection removed: {conn_id}")
         self.signals.emit('connection-removed', conn_id)
-        
+
         # Emit specific signal based on connection type
-        if connection.get_connection_type() == "802-11-wireless":
+        connection_type = connection.get_connection_type()
+        if "wireless" in connection_type:
             if self.wifi_manager:
                 self.wifi_manager.signals.emit('wifi-changed')
+        elif "ethernet" in connection_type:
+            if self.ethernet_manager:
+                self.ethernet_manager.signals.emit('ethernet-changed', 'disconnected')
     
     def _setup_devices(self):
         """Setup WiFi and Ethernet device managers"""
@@ -655,6 +664,7 @@ class NetworkManager(GObject.GObject):
         
         if self.ethernet_manager:
             info["ethernet"] = {
+                "iface": self.ethernet_manager.iface,
                 "speed": self.ethernet_manager.speed,
                 "connection_state": self.ethernet_manager.connection_state,
                 "icon_name": self.ethernet_manager.icon_name,

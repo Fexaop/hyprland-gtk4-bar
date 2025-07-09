@@ -1,0 +1,7 @@
+.network-section,
+.boxed-list,
+.boxed-list row {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}

@@ -76,7 +76,8 @@ class MyApp(Gtk.Application):
                 'styles/notch.css',
                 'styles/notification.css',
                 'styles/workspace.css',
-                'styles/systray.css'
+                'styles/systray.css',
+                'styles/audio.css'
             ]
             os.makedirs('styles', exist_ok=True)
             windows = [self.notch_window, bar]

@@ -110,6 +110,10 @@ class AudioStream(GObject.Object):
         )
 
     @GObject.Property(type=Cvc.MixerStream, flags=GObject.ParamFlags.READABLE)
+    def cvc_stream(self) -> Cvc.MixerStream:
+        return self._stream
+
+    @GObject.Property(type=Cvc.MixerStream, flags=GObject.ParamFlags.READABLE)
     def stream(self) -> Cvc.MixerStream:
         return self._stream
 
